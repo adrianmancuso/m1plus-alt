@@ -31,6 +31,8 @@
 #define GENRES_SORT_TMP "/mnt/data/m1plus/genres-sort.tmp"
 #define COMPOSERS_SORT_FILE "/mnt/data/m1plus/composers-sort" /* and the Composers page */
 #define COMPOSERS_SORT_TMP "/mnt/data/m1plus/composers-sort.tmp"
+#define LABELS_SORT_FILE "/mnt/data/m1plus/labels-sort" /* and the Labels page */
+#define LABELS_SORT_TMP "/mnt/data/m1plus/labels-sort.tmp"
 #define SONGS_SORT_FILE \
     "/mnt/data/m1plus/songs-sort-rev" /* the Songs page's direction of its Title, File Name and Format orders (its Sort card): "a" Z-A; missing or anything else A-Z (patch/songs.c); the order itself is the stock sort_flag */
 #define SONGS_SORT_TMP "/mnt/data/m1plus/songs-sort-rev.tmp"

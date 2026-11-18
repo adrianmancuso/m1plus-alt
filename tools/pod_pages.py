@@ -22,6 +22,7 @@ HOME_UPDATE = 2      # systemset/updatemusic_page: Update Library
 HOME_FOLDER = 4
 HOME_GENRE = 7
 HOME_COMPOSER = 8
+AR_LABELS = 64   # ACT_ARTISTS's Labels page (patch/artists.h AR_LABELS: the record labels, docs/modules/labels.md); no stock Home tile has this number
 HOME_HIRES = 9
 HOME_FAV = 10
 HOME_MOST = 11
@@ -603,6 +604,8 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Subsonic', ACT_SUBSONIC),
     # Audiobooks (docs/modules/audiobooks.md): the books in /mnt/mmc/Audiobooks and their parts; an item like the rest, hidden from the menu by default (on Extras, in Library, after Podcasts).
     Row('Audiobooks', ACT_BOOKS),
+    # Labels (docs/modules/labels.md): the record labels the files' tags name, and a label's albums; an item like the rest, hidden from the menu by default (on Extras, in Library, after Composers).
+    Row('Labels', ACT_ARTISTS, AR_LABELS),
 ]
 SETTINGS_ID = 18
 assert ITEMS[SETTINGS_ID].label == 'Settings'
@@ -611,17 +614,17 @@ assert ITEMS[SETTINGS_ID].label == 'Settings'
 # comes from DEFAULT_MENU and EXTRAS_GROUPS, not from the id.
 ITEM_IDS = ('Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders',
             'Favorites', 'Recently Added', 'Recently Played', 'Most Played', 'Composers', 'Hi-Res', 'Update Library',
-            'Tidal', 'CD Ripper', 'Settings', 'Pod', 'Podcasts', 'Search', 'Radio', 'Subsonic', 'Audiobooks')
+            'Tidal', 'CD Ripper', 'Settings', 'Pod', 'Podcasts', 'Search', 'Radio', 'Subsonic', 'Audiobooks', 'Labels')
 assert tuple(r.label for r in ITEMS[:len(ITEM_IDS)]) == ITEM_IDS, 'menu item ids are frozen: append new items, never insert or reorder'
 DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved string "12345"): Cover Flow, Albums, Artists, Songs, Playlists, then Extras. A minimal menu: Now Playing is not
                                     # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Settings; every other item is on the Extras page,
                                     # grouped (EXTRAS_GROUPS), and Settings > Main Menu can show any of them
 assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
-ID_CHARS = '012345678abcdefghijklmnop'   # one saved-list character per menu item
+ID_CHARS = '012345678abcdefghijklmnopq'   # one saved-list character per menu item
 assert len(ID_CHARS) == len(ITEMS)
 OFF_CHAR = '-'           # the saved list's separator: the item characters after it are turned off (not listed on the Extras page); at most once
 DEFAULT_OFF = []         # no item is turned off by default
-MENU_FILE_MAX = 28       # 25 item characters, optional off separator, newline and NUL
+MENU_FILE_MAX = 29       # 26 item characters, optional off separator, newline and NUL
 MENU = Page('m1plus_menu', 'm1plus_menu_page', 'M1+ Music', rows=ITEMS + [
     Row('Extras', ACT_PAGE, EXTRAS_PAGE_INDEX),   # always shown, always last
 ])
@@ -861,7 +864,7 @@ def format_pulldown(shown):
 # views, the song collections, the streaming services, the tools. Settings is in none: it is the Extras page's navbar button.
 EXTRAS_GROUPS = (
     ('Play', ('Now Playing', 'Shuffle', 'Pod')),
-    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts', 'Audiobooks', 'Radio', 'Search')),
+    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Labels', 'Folders', 'Podcasts', 'Audiobooks', 'Radio', 'Search')),
     ('Collections', ('Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res')),
     ('Streaming', ('Subsonic', 'Tidal')),
     ('Tools', ('Update Library', 'CD Ripper')),

@@ -226,7 +226,7 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'), 'Audiobooks': ('pod_ic_audiobooks', 'book-headphones'), 'Radio': ('pod_ic_radio', 'radio'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'), 'Audiobooks': ('pod_ic_audiobooks', 'book-headphones'), 'Labels': ('pod_ic_labels', 'tag'), 'Radio': ('pod_ic_radio', 'radio'),
             'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'VU Meter Mode': ('pod_ic_vu', 'gauge'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics'), 'Sleep Timer': ('pod_ic_sleep', 'moon'), 'Display Mode': ('pod_ic_mode', 'smartphone'),   # Now Playing's More sheet rows (tools/mod_lists.py)
             # the Control Center page (pod_pages.PULLDOWN_TILES): each tile's own glyph (PULLDOWN below); Output's tile shows the text PO / LO, so its row has stock's Output glyph (sset_outputway)
             'Wi-Fi': ('pod_ic_wifi', 'wifi'), 'Bluetooth': ('pod_ic_bt', 'bluetooth'), 'Button Lock': ('pod_ic_lock', 'lock'), 'Gain': ('pod_ic_gain', '+gain-high'),

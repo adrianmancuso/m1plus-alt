@@ -49,6 +49,7 @@
 #include "artsplit.h"
 #include "coverflow.h"
 #include "entries.h"
+#include "labels.h"
 
 #define AR_ROW \
     52 /* tools/pod_ui.py ROW_H: the menu's rows (the Artists rows were 52 px before the page took the Songs page's structure) */
@@ -75,6 +76,8 @@
 #define AR_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
 #define MAX_ARTISTS 20000 /* one byte of rank and four of order each, no widget: bounded by the stock list's own size */
 #define AR_TILES (GRID_VIEW_H / AR_ROW + 6) /* the text ring: the rows in view, two beyond and the history */
+#define CLASS_LABELS \
+    0x4c42u /* the Labels page (artists_open(AR_LABELS)): our own class, never given to a stock query; the rows are the record labels' table's (patch/labels.h) */
 
 static struct {
     void *win, *view, *sv, *list, *status;
@@ -127,6 +130,8 @@ ar_open(unsigned i) { /* (a symbol of its own: the tests call it with a display 
     if (!ar.artists || i >= ar.count) return RET_OK;
     if (ar.src) {
         albums_open_src(ar.src, deque_at(ar.artists, ar_stock(i)));
+    } else if (ar.cls == CLASS_LABELS) {
+        albums_open_label(ar_name(deque_at(ar.artists, ar_stock(i))));
     } else if (ar.cls == CLASS_GENRES) {
         void *r = deque_at(ar.artists, ar_stock(i));
         songs_open_genre(ar_name(r), *(int *)((char *)r + REC_ID) == -1);
@@ -153,8 +158,10 @@ static const char *ar_text(const void *ctx, unsigned i) { return ar_name(((void 
 
 static void ar_sort(void) {
     unsigned i, n = 0, *v;
-    int keyed = ar.cls ==
-                CLASS_ARTISTS; /* Genres and Composers keep stock's order (the in-memory title sort) unless reversed */
+    int keyed =
+        ar.cls == CLASS_ARTISTS ||
+        ar.cls ==
+            CLASS_LABELS; /* Genres and Composers keep stock's order (the in-memory title sort) unless reversed; the labels have no order of their own */
     ar.order = (unsigned *)0;
     ar_key = (const char **)0;
     if (ar.count < 2 || (!keyed && !ar.rev)) return;
@@ -225,7 +232,7 @@ static void ar_title_update(void) {
 /* The title names the mode artist_type selects (Artists / Album Artists), or the page (Genres, Composers). */
 static void ar_mode_show(void) {
     if (ar.cls != CLASS_ARTISTS) {
-        ar_title_text(ar.cls == CLASS_GENRES ? "Genres" : "Composers");
+        ar_title_text(ar.cls == CLASS_GENRES ? "Genres" : ar.cls == CLASS_LABELS ? "Labels" : "Composers");
         return;
     }
     ar_title_text(!ar.src && *(volatile int *)ARTIST_TYPE == 1 ? "Album Artists" : "Artists");
@@ -515,7 +522,7 @@ static int ar_local_changed(void) {
 static int ar_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (!ar.src && ar.view && ar_local_changed()) {
+    if (!ar.src && ar.cls != CLASS_LABELS && ar.view && ar_local_changed()) {
         ar.epoch = ap_epoch(); /* (the page is made again below: its circles are looked for afresh) */
         ar_load(1);
         return RET_OK;
@@ -551,6 +558,7 @@ static int ar_on_destroy(void *ctx, void *e) {
     free(ar.order);
     free(ar.rank);
     free(ar.pst);
+    if (ar.cls == CLASS_LABELS) lb_release();
     memset(&ar, 0, sizeof ar);
     return RET_OK;
 }
@@ -559,6 +567,28 @@ static int ar_on_destroy(void *ctx, void *e) {
  * Flow's own queries cannot pull it away. A source's list is the deque src->list made, owned by the page. keep: a re-read for a changed source keeps the scroll position. */
 static void *ar_pre __attribute__((
     section(".scratch"))); /* a source's list already read by ar_on_gen, which ar_load takes instead of asking again */
+
+/* The Labels page's rows: one per label of the table (lb_name; the table keeps one spelling of each, ASCII case aside), each a class row (REC_TYPE 4, REC_ID <= -3) titled
+ * with the name. NULL when there is none or no memory. */
+static void *ar_label_rows(void) {
+    unsigned i, n = lb_count();
+    void *q = n && n <= MAX_ARTISTS ? _create_deque("stSongInfo") : (void *)0;
+    if (!q) return (void *)0;
+    deque_init(q);
+    for (i = 0; i < n; ++i) {
+        unsigned rec[REC_SIZE / 4];
+        memset(rec, 0, sizeof rec);
+        I(rec, REC_ID) = -3 - (int)i;
+        *(const char **)((char *)rec + REC_TITLE) = lb_name(i);
+        I(rec, REC_TYPE) = 4;
+        _deque_push_back(q, rec); /* (the stock copy: the record and its strings) */
+    }
+    if (!deque_size(q)) {
+        deque_destroy(q);
+        return (void *)0;
+    }
+    return q;
+}
 
 static void ar_load(int keep) {
     void *list;
@@ -589,6 +619,12 @@ static void ar_load(int keep) {
         if (!ar.count && ar.src->state) st = ar.src->state(ar.src, LS_ARTISTS, (void *)0);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
         if (ar.count) ar_sort();
+    } else if (ar.cls == CLASS_LABELS) {
+        if ((list = ar_label_rows()) != (void *)0) {
+            ar.artists = list, ar.count = deque_size(list);
+            if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
+            ar_sort();
+        }
     } else if (ar.cls == CLASS_ARTISTS && *(volatile int *)ARTIST_TYPE != 1 && as_mask() &&
                (list = as_rows())) { /* the artist split is on: one row per name (patch/artsplit.c) */
         ar.split = 1;
@@ -616,7 +652,10 @@ static void ar_load(int keep) {
     ls_room(ar.status, ar.spin,
             LS_ROOM_NAV + (ar.src ? SG_TITLE_H : 0)); /* (under the title the source's page keeps) */
     m1_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
-    if (!ar.count) widget_set_tr_text(ar.status, ar.src ? ls_empty_key(st, "No artists") : "Update Local Music first");
+    if (!ar.count)
+        widget_set_tr_text(ar.status, ar.src                   ? ls_empty_key(st, "No artists")
+                                      : ar.cls == CLASS_LABELS ? "No labels"
+                                                               : "Update Local Music first");
     ls_spin(ar.spin, st == LS_ST_LOADING && ar.count == 0 && ar.spin != (void *)0);
     if (!ar.count) widget_set_prop_int(ar.sv, "yoffset", 0);
     az_rail_fit(&ar.al, GRID_VIEW_H);
@@ -631,7 +670,8 @@ static void ar_load(int keep) {
 
 /* The page's saved order: artists-sort, genres-sort or composers-sort, one character: '0' Name A-Z (the default and any other content), 'a' Name Z-A. */
 static const char *ar_sort_file(int tmp) {
-    return ar.cls == CLASS_GENRES      ? (tmp ? GENRES_SORT_TMP : GENRES_SORT_FILE)
+    return ar.cls == CLASS_LABELS      ? (tmp ? LABELS_SORT_TMP : LABELS_SORT_FILE)
+           : ar.cls == CLASS_GENRES    ? (tmp ? GENRES_SORT_TMP : GENRES_SORT_FILE)
            : ar.cls == CLASS_COMPOSERS ? (tmp ? COMPOSERS_SORT_TMP : COMPOSERS_SORT_FILE)
                                        : (tmp ? ARTISTS_SORT_TMP : ARTISTS_SORT_FILE);
 }
@@ -721,8 +761,11 @@ static int ar_open_page(int home, const lib_src_t *src) {
     if (ar.win) return -1;
     memset(&ar, 0, sizeof ar);
     ar.src = src;
-    ar.cls = home == HOME_GENRE ? CLASS_GENRES : home == HOME_COMPOSER ? CLASS_COMPOSERS : CLASS_ARTISTS;
-    ar.home = ar.cls == CLASS_ARTISTS ? 0 : home;
+    ar.cls = home == HOME_GENRE      ? CLASS_GENRES
+             : home == HOME_COMPOSER ? CLASS_COMPOSERS
+             : home == AR_LABELS     ? CLASS_LABELS
+                                     : CLASS_ARTISTS;
+    ar.home = ar.cls == CLASS_GENRES || ar.cls == CLASS_COMPOSERS ? home : 0; /* (Labels has no stock page) */
     ar.win = window_open("m1plus_artists");
     if (!ar.win) {
         int h = ar.home;
@@ -730,6 +773,7 @@ static int ar_open_page(int home, const lib_src_t *src) {
         return h ? pod_home_open(h) : -1;
     }
     widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
+    if (ar.cls == CLASS_LABELS) lb_acquire(); /* (released with the page) */
     m1_bind(ar.win, "btn_return", m1_on_back, (void *)0);
     m1_bind(ar.win, "btn_backtoplayer", m1_on_player, (void *)0);
     ar.list = widget_lookup(ar.win, "artists_listview", 1);

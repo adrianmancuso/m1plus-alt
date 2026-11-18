@@ -1,7 +1,8 @@
 # Record labels
 
 **Sources:** `patch/labels.c`, `patch/labels.h`, the `CC_LABELS` mode in `patch/covercache.c`, the
-label stage in `patch/homecover.c`. **Tests:** `test/pod/labels.py`.
+label stage in `patch/homecover.c`, the Labels page in `patch/artists.c` and `patch/albums.c`.
+**Tests:** `test/pod/labels.py`, `test/pod/artists.py` (`label_page_tests`).
 
 The stock database has no label column, so each file's record label is read from its tags on the
 shared worker during the Home pass ([homecover](homecover.md#record-labels)) and kept on the card.
@@ -50,3 +51,22 @@ kept. There are at most `LB_MAX_LABELS` distinct labels; a new label past that l
   prunes nothing.
 - `lb_count` / `lb_name(i)` list the distinct labels.
 - `lb_clear` deletes the file and bumps `lb_epoch`, which resets the Home pass's complete mark.
+- `lb_path(path)`: the label of the file's entry of any size; NULL when it has none or no entry.
+  `lb_same(a, b)`: ASCII case-insensitive equality (0 when either is NULL).
+
+## Labels page
+
+Menu item 25 `Labels` (`ACT_ARTISTS` with `AR_LABELS` 64; Library group after Composers) opens
+the Artists page on our own class `CLASS_LABELS` (`0x4c42`, never given to a stock query). The page
+holds the table (`lb_acquire` at open, `lb_release` on destroy).
+
+- The rows are the table's labels (`ar_label_rows`: class rows, `REC_ID` -3 - index, the name in
+  `REC_TITLE`), sorted by the name keys as Artists are; Name A-Z / Z-A in `labels-sort`. The title is
+  "Labels"; with no label read yet the page says "No labels". The card has Name alone. The rows are
+  read at open, not again while the page is up.
+- A tap is `albums_open_label(name)`: the Albums page in the saved mode on the library albums
+  (`cc_albums`) whose first track's file has the label (`lb_path` of `REC_PATH`, `lb_same`), in
+  library order, the label as the title. An album with tracks from several labels is filed under
+  its first track's. The card has the views and orders but no Search; the Cover Flow button is
+  hidden and insensitive. An album tap opens its library row (`cc_open_album(NULL, 0, lrow[row])`).
+  The list is found again on foreground; an empty one says "No albums".

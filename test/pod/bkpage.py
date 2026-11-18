@@ -804,8 +804,8 @@ def asset_tests(ctx):
     expect(tree.find('label_bk_btn').get('style:normal:bg_color') == '#FFFFFF', 'the capsule\'s word is dark on its own white')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Audiobooks')
-    expect(item == 24 == len(P.ITEMS) - 1 and P.ITEMS[item].action == P.ACT_BOOKS == 144 and P.ID_CHARS[item] == 'p' and item not in P.DEFAULT_MENU and P.BOOKS in P.PAGES and P.BOOKS.kind == 'books'
-           and P.MENU_FILE_MAX == 28, 'Audiobooks is the last item (id 24, saved as "p"), hidden from the menu by default; its page is one of the pages')
+    expect(item == 24 == len(P.ITEMS) - 2 and P.ITEMS[item].action == P.ACT_BOOKS == 144 and P.ID_CHARS[item] == 'p' and item not in P.DEFAULT_MENU and P.BOOKS in P.PAGES and P.BOOKS.kind == 'books'
+           and P.MENU_FILE_MAX == 29, 'Audiobooks is item 24 (before Labels, saved as "p"), hidden from the menu by default; its page is one of the pages')
     expect(P.EXTRAS_GROUPS[1][1][-4:] == ('Podcasts', 'Audiobooks', 'Radio', 'Search') and P.EXTRAS_GROUP_OF[item] == 1 and P.parse_menu_full(b'123456p\n') == ([1, 2, 3, 4, 5, 6, 24], []) and P.format_menu([1, 2, 24]) == '12p\n',
            'Extras lists it in the Library group after Podcasts; the saved list carries it as p')
     full = ''.join(P.ID_CHARS[i] for i in range(len(P.ITEMS)))

@@ -10,3 +10,6 @@ int albums_open_src(const lib_src_t *src, void *artist);
 
 int albums_open(void); /* Albums, our page in the mode used last (grid or list) */
 int albums_open_artist(void *artists, unsigned index, unsigned scope); /* 0 once up, -1 when the window will not open */
+int albums_open_label(
+    const char *
+        name); /* a record label's albums (patch/labels.h; the name is copied): 0 once up, -1 when the window will not open */

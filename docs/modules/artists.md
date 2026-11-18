@@ -6,7 +6,7 @@
 `test/pod/artistphoto.py`, `test/pod/i18n.py`. **Preview:** `tools/preview/preview_artists_photo.py
 WORKDIR OUT.png`.
 
-Our Artists page, with Genres and Composers on the same code. No hook; if the window will not open
+Our Artists page, with Genres, Composers and record Labels ([labels](labels.md#labels-page)) on the same code. No hook; if the window will not open
 the Home dispatcher opens the tile's stock `localclass_page`.
 
 ## Genres and Composers are the same page

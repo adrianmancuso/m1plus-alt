@@ -43,6 +43,9 @@ and mode on that artist's or composer's albums.
   freed on destroy. The large title is the name (296 px, ellipsis; the small title is fitted to 110
   px); an empty list says "No albums".
 
+A record label's albums (`albums_open_label`) use the unscoped page on a filtered copy of the
+library list: [labels](labels.md#labels-page).
+
 ### Artist header
 
 An **artist's** or **composer's** page has the artist header in place of the large title. A

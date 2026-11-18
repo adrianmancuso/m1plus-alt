@@ -42,5 +42,9 @@ int lb_has(const char *path); /* an entry for path, any size */
 /* The distinct labels some entry names (acquired): lb_count of them, lb_name(i) for 0 <= i < lb_count, in no particular order. */
 unsigned lb_count(void);
 const char *lb_name(unsigned i);
+/* path's label (acquired), any size; NULL when it has none or no entry. */
+const char *lb_path(const char *path);
+/* The two labels are one (ASCII case aside): the Labels page lists them once and a label's albums take either. */
+int lb_same(const char *a, const char *b);
 void lb_clear(void); /* the file deleted and the table in memory emptied */
 unsigned lb_epoch(void); /* counts the clears */

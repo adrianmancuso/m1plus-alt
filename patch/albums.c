@@ -70,6 +70,7 @@
 #include "songops.h"
 #include "libsrc.h"
 #include "albums.h"
+#include "labels.h"
 #include "nextalbum.h"
 #include "artistphoto.h"
 #include "coverflow.h"
@@ -164,7 +165,10 @@ static struct {
     ls_cpoll_t
         cp; /* the shared cover poll (patch/libsrc.c ls_cover_poll): asks again and turns the cover spinners while a tile's cover is on its way */
     grid_t
-        g; /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; LAST (test/pod/albums.py reads the fields above by index) */
+        g; /* the tile ring (GRID_TILES, heap), the placeholder, the mode's cover size (g.side): patch/grid.c; (test/pod/albums.py reads the fields above by index) */
+    /* a record label's albums (albums_open_label; NULL / NULL on every other page): label the name (heap), lrow the library Albums row of each album of the page's list (cc_open_album opens that row) */
+    char *label;
+    unsigned *lrow;
 } al __attribute__((section(".scratch")));
 
 /* The room of the circle, when the artist page has none (no photo): everything under it is this much higher. */
@@ -681,6 +685,33 @@ static void al_build_later(void) {
 
 static void al_reload_with(void *albums, unsigned n, unsigned *keys, unsigned *years);
 static void al_scoped_reload(void);
+
+/* A label's albums: the library Albums rows (cc_albums) whose first track's file has the label (labels.h lb_path, ASCII case aside; an album's label is its first track's), copied in the
+ * library's order into a list the page owns; *lrow (heap) the library row of each. NULL (and *lrow NULL) when none has it or there is no memory. */
+static void *al_label_list(unsigned **lrow) {
+    void *all = cc_albums(), *out = (void *)0;
+    unsigned i, n = all ? deque_size(all) : 0, k = 0, *rows = n ? calloc(n, sizeof *rows) : (unsigned *)0;
+    *lrow = (unsigned *)0;
+    if (rows && (out = _create_deque("stSongInfo")) != (void *)0) {
+        deque_init(out);
+        for (i = 0; i < n; ++i) {
+            void *rec = deque_at(all, i);
+            if (I(rec, REC_ID) == -1 || !lb_same(lb_path(cc_str(rec, REC_PATH)), al.label)) continue;
+            _deque_push_back(out, rec); /* (the stock copy: the record and its strings) */
+            if (deque_size(out) != k + 1) break;
+            rows[k++] = i;
+        }
+    }
+    if (all) deque_destroy(all);
+    if (!k) {
+        if (out) deque_destroy(out);
+        free(rows);
+        return (void *)0;
+    }
+    *lrow = rows;
+    return out;
+}
+
 static int al_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -690,7 +721,16 @@ static int al_on_fg(void *ctx, void *e) {
     if (al.started && !al.src) {
         if (al.artist_row)
             al_scoped_reload();
-        else {
+        else if (al.label) { /* a label's: its rows found again (the new row numbers with them) */
+            unsigned *rows;
+            void *fresh = al_label_list(&rows);
+            if (fresh || !cc_list_failed()) {
+                free(al.lrow);
+                al.lrow = rows;
+                al_reload_with(fresh, fresh ? deque_size(fresh) : 0, (unsigned *)0, (unsigned *)0);
+            } else
+                free(rows);
+        } else {
             void *fresh = cc_albums();
             if (fresh || !cc_list_failed())
                 al_reload_with(fresh, fresh ? deque_size(fresh) : 0, (unsigned *)0,
@@ -774,7 +814,10 @@ static int al_on_up(void *ctx, void *e) {
             return RET_OK;
         na_note_albums(al.albums, al.order, al.count, al.scope,
                        al.artist_row); /* the order shown, for Continue with Next Album */
-        cc_open_album(al.artist_row, al.scope, row); /* scoped: the artist's list, class 0xff01 / 0xff02 */
+        cc_open_album(
+            al.artist_row, al.scope,
+            al.lrow ? (int)al.lrow[row]
+                    : row); /* scoped: the artist's list, class 0xff01 / 0xff02; a label's album: its library row */
         na_note_drop();
     }
     return RET_OK;
@@ -873,6 +916,9 @@ static int al_on_destroy(void *ctx, void *e) {
     free(al.years);
     free(al.ykey);
     free(al.order);
+    if (al.label) lb_release();
+    free(al.label);
+    free(al.lrow);
     memset(&al, 0, sizeof al);
     return RET_OK;
 }
@@ -1193,9 +1239,9 @@ static void al_empty(void) {
     m1_show(al.status, !(st == LS_ST_LOADING && al.spin));
     ls_spin(al.spin, st == LS_ST_LOADING && al.spin != (void *)0);
     if (al.az_ok) m1_show(al.az.rail, 0), m1_show(al.az.bubble, 0); /* (nothing to index) */
-    widget_set_tr_text(al.status, al.count                  ? "Not enough memory"
-                                  : al.artist_row || al.src ? ls_empty_key(st, "No albums")
-                                                            : "Update Local Music first");
+    widget_set_tr_text(al.status, al.count                              ? "Not enough memory"
+                                  : al.artist_row || al.src || al.label ? ls_empty_key(st, "No albums")
+                                                                        : "Update Local Music first");
 }
 
 /* The source's gen moved: the list is read again and, if it changed, the tiles are made again (the scroll position stays where the content allows). A list that is the same swaps the records only:
@@ -1298,14 +1344,27 @@ static int al_on_gen(const void *unused) {
     return RET_OK;
 }
 
+static char *al_pending
+    __attribute__((section(".scratch"))); /* albums_open_label's name, taken by al_open (which clears al) */
+
 /* The page in the given mode. 0 once it is up, -1 if the window could not open, -2 if the asset is not ours (the
  * page is left again). artist_row (a deque holding the stock row of an artist, or a composer when scope says so) scopes it to that artist's albums: the
  * page then owns the deque, from the moment the window is up. */
 static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *src) {
-    if (al.win) return -1;
+    char *label = al_pending;
+    al_pending = (char *)0;
+    if (al.win) {
+        free(label);
+        return -1;
+    }
     memset(&al, 0, sizeof al);
     al.win = window_open("m1plus_albums");
-    if (!al.win) return -1;
+    if (!al.win) {
+        free(label);
+        return -1;
+    }
+    if (label) lb_acquire(); /* (released with the page) */
+    al.label = label;
     al.list = list;
     al.artist_row = artist_row, al.scope = scope;
     al.src = src == &lib_stock ? (const lib_src_t *)0 : src; /* (the stock source is no source: today's code) */
@@ -1339,7 +1398,7 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     if (vs_bind(
             &al.vs, al.win, al_on_item, al_on_scrim,
             (artist_row ? VS_ALL_SORTS & ~(1u << CC_SORT_ARTIST) : VS_ALL_SORTS) | VS_WITH_VIEWS |
-                ((artist_row ? al_can_find() : ls_caps(al.src) & LS_CAP_SEARCH)
+                ((artist_row ? al_can_find() : !al.label && ls_caps(al.src) & LS_CAP_SEARCH)
                      ? VS_WITH_SEARCH
                      : 0))) { /* (one artist's albums: no Artist row, and no Search row: it searched the whole library's albums; a source without Search: no row. A library artist's page has Find Artist Photo in the Search row's slot) */
         navigator_back(); /* an asset that is not ours */
@@ -1359,8 +1418,8 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     m1_show(al.status, 0);
     al.small = widget_lookup(al.win, "label_title", 1);
     al.big = widget_lookup(al.win, "al_title", 1);
-    if (!(ls_caps(al.src) &
-          LS_CAP_COVERFLOW)) { /* no Cover Flow for this source: its button goes and the "..." takes the capsule's left cap (the Artists page's), with the title running to it */
+    if (al.label || !(ls_caps(al.src) & LS_CAP_COVERFLOW)) {
+        /* (a label's page too: Cover Flow is the library's) */ /* no Cover Flow for this source: its button goes and the "..." takes the capsule's left cap (the Artists page's), with the title running to it */
         m1_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
         if (al.btn) {
             grid_icons(al.btn, "pod_nav_more", "pod_nav_more_down");
@@ -1391,6 +1450,12 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
             m1_show(al.big, 0);
             if (!al.circ) widget_move(al.name_lbl, PH_NAME_X, AL_NAME_Y - PH_SHIFT);
         }
+    } else if (al.label) { /* a label's albums, the label as the title */
+        az_fit(al.big, al.label);
+        az_fit(al.small, al.label);
+        al.albums = al_label_list(&al.lrow);
+        al.count = al.albums ? deque_size(al.albums) : 0;
+        al.order = al_order();
     } else {
         az_fit(al.big, TR("Albums")); /* (the language's word) */
         az_fit(al.small, TR("Albums"));
@@ -1438,6 +1503,17 @@ int albums_open_src(const lib_src_t *src, void *artist) {
     if (src == &lib_stock) src = (const lib_src_t *)0;
     if (artist) return al_open_artist(artist, CLASS_ARTISTS, src);
     return src ? al_open(!al_use_grid(), (void *)0, 0, src) : albums_open();
+}
+
+/* A record label's albums (patch/labels.h; the Labels page's tap): the library page, in the mode used last, on the albums whose first track has the label `name` (copied), the name as the title.
+ * The "..." card has the orders and views, no Search; no Cover Flow button. 0 once the page is up, -1 if it could not open, -2 if the asset is not ours. */
+int albums_open_label(const char *name) {
+    unsigned n = name ? (unsigned)strlen(name) : 0;
+    if (al.win || !n) return -1;
+    al_pending = calloc(n + 1, 1);
+    if (!al_pending) return -1;
+    memcpy(al_pending, name, n + 1);
+    return al_open(!al_use_grid(), (void *)0, 0, (const lib_src_t *)0);
 }
 
 /* The Artists page's row `index` of `artists` (patch/artists.c; the caller keeps its list): the same page, in the mode used last, on that artist's

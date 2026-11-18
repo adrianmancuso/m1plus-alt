@@ -489,6 +489,22 @@ unsigned lb_count(void) { return lb.nlab; }
 
 const char *lb_name(unsigned i) { return i < lb.nlab ? lb.names[i] : (const char *)0; }
 
+const char *lb_path(const char *path) {
+    int at = path && *path ? lb_find(lb_key(path)) : -1;
+    return at >= 0 && lb.tab[at].lab ? lb.names[lb.tab[at].lab - 1] : (const char *)0;
+}
+
+int lb_same(const char *a, const char *b) {
+    unsigned x, y;
+    if (!a || !b) return 0;
+    do {
+        x = (unsigned char)*a++, y = (unsigned char)*b++;
+        if (x - 'A' < 26) x += 32;
+        if (y - 'A' < 26) y += 32;
+    } while (x == y && x);
+    return x == y;
+}
+
 /* The labels no entry names dropped and the entries renumbered, then the whole table written through LB_TMP. */
 static int lb_write(void) {
     unsigned *map = lb.nlab ? calloc(lb.nlab, sizeof *map) : (unsigned *)0, i, k = 0, pb = 0, h[5];
