@@ -1,8 +1,8 @@
 # Home cover build
 
-**Sources:** `patch/homecover.c`, `patch/durations.c`, `patch/covlist.c`, `cache_pill` in
+**Sources:** `patch/homecover.c`, `patch/durations.c`, `patch/labels.c`, `patch/covlist.c`, `cache_pill` in
 `tools/pod_ui.py`, `HC_*` in `patch/offsets.inc`. **Tests:** `test/pod/homecover.py`,
-`test/pod/durations.py`.
+`test/pod/durations.py`, `test/pod/labels.py`.
 
 The Home page ([menu](menu.md)) builds the album covers that have no cache file in the background,
 with the shared worker ([covercache](covercache.md)), and shows a progress pill at the top while it
@@ -150,6 +150,14 @@ n/m` while the worker measures the songs the durations table lacks ([album-page]
   Clear Track Durations is used, and it writes the tracks line.
 - The set needs the card (the table is `/mnt/mmc/.m1plus/durations`; without it the pass does not
   start) but not 16 MB free.
+
+## Record labels
+
+After the durations the same pill shows `Reading labels n/m` while the worker reads the label tag of
+the songs the labels table lacks ([labels](labels.md)). The stage runs as the durations one
+(`hc_len_begin(1)`, a `CC_LABELS` set of up to `CC_MAX_LBL_JOBS` 4000, the same batching, saving,
+prune and resume); CUE images are read once like any file. The tracks line is written only when both
+stages find every song in their tables, and a missing `/mnt/mmc/.m1plus/labels` makes it stale.
 
 ## Rebuild Covers
 

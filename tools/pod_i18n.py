@@ -396,6 +396,9 @@ TEXT = dict([
     # A native-speaker pass is wanted.
     _t('Measuring tracks', '正在测量曲目', '正在測量曲目', '曲の長さを測定中', '곡 길이 측정 중', 'Mesure des titres', 'Titeldauern werden gemessen', 'Midiendo pistas', 'Misura delle tracce',
        'กำลังวัดความยาวเพลง', 'Mierzenie utworów', 'Измерение треков', 'Вимірювання треків'),
+    # Record labels (patch/labels.c, patch/homecover.c): the Home line "Reading labels n/m" after the durations. A native-speaker pass is wanted.
+    _t('Reading labels', '正在读取厂牌', '正在讀取廠牌', 'レーベルを読み込み中', '레이블 읽는 중', 'Lecture des labels', 'Labels werden gelesen', 'Leyendo sellos', 'Lettura delle etichette',
+       'กำลังอ่านค่ายเพลง', 'Odczyt wytwórni', 'Чтение лейблов', 'Читання лейблів'),
     _t('Checking library…', '正在检查曲库…', '正在檢查曲庫…', 'ライブラリを確認中…', '라이브러리 확인 중…', 'Vérification de la bibliothèque…', 'Datenbank wird geprüft…',
        'Comprobando biblioteca…', 'Controllo libreria…', 'กำลังตรวจสอบคลัง…', 'Sprawdzanie biblioteki…', 'Проверка медиатеки…', 'Перевірка медіатеки…'),
     _t('Rebuilding covers…', '正在重建封面…', '正在重建封面…', 'カバーを再構築中…', '커버 다시 만드는 중…', 'Reconstruction des pochettes…', 'Cover werden neu erstellt…',

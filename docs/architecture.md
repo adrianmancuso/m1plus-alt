@@ -43,6 +43,7 @@ binary. See [workflow](workflow.md) for commands, [UI](ui.md) for layout and ass
 | [Cover Flow](modules/coverflow.md) | Renderer, gestures, landscape mode |
 | [Cover cache](modules/covercache.md) | Shared cover builder, resampling, .bad retry |
 | [Home cover build](modules/homecover.md) | Background cover build and progress pill |
+| [Record labels](modules/labels.md) | Label tag reader and on-card label table |
 | [Albums](modules/albums.md) | Grid/list page, sorts, view card |
 | [Album page](modules/album-page.md) | Own album page and playback actions |
 | [Artists](modules/artists.md) | Artists, Album Artists, Genres, Composers, split |

@@ -177,7 +177,7 @@ void *cc_playing(void); /* the stSongInfo of the track the player is on, NULL if
  *   CC_MISSING  only albums with no cache file (neither a picture nor the empty "no art" marker); cc_build_add skips the rest
  *   CC_REBUILD  every album is extracted again and its file replaced (temp + rename), a marker too, so an album that gained
  *               art gets it; an album that now yields none keeps what it has (old files stay until a new one replaces them) */
-enum { CC_MISSING = 0, CC_REBUILD = 1, CC_DURATIONS = 2 };
+enum { CC_MISSING = 0, CC_REBUILD = 1, CC_DURATIONS = 2, CC_LABELS = 3 };
 /* CC_DURATIONS is a set of another kind (patch/durations.c): its jobs are files whose length TagLib reads (cc_build_add_dur), nothing is written to the card and cc_build_start needs
  * no card space. The owner merges what finished (cc_build_dur, i < cc_build_done) into the durations table. */
 int cc_build_add_dur(
@@ -189,6 +189,12 @@ int cc_build_dur(
 #define CC_MAX_JOBS 4000 /* the job array is bounded (Cover Flow's MAX_ALBUMS) */
 #define CC_MAX_LEN_JOBS \
     30000 /* a CC_DURATIONS set's bound (a job is 16 bytes and a path copy); a longer library is measured in more passes */
+/* CC_LABELS is a set like CC_DURATIONS (cc_build_add_dur queues a file, nothing is written to the card), but the worker reads each file's record label (patch/labels.c lb_probe):
+ * the owner merges what finished (cc_build_lbl, i < cc_build_done) into the labels table. */
+int cc_build_lbl(int i, unsigned *key, unsigned *size,
+                 const char **label); /* the finished job i: 1 (label "" = none), or 0 */
+#define CC_MAX_LBL_JOBS \
+    4000 /* a CC_LABELS set's bound (each job holds a label of LB_MAX bytes: 512 KB); a longer library is read in more passes */
 int cc_build_open(unsigned capacity, int mode); /* 1: an empty job set held; 0: another set is held, or no memory */
 int cc_build_add(const char *track,
                  unsigned key); /* 1 added; 0 skipped (CC_MISSING and the file exists); -1 full or no memory */

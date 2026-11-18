@@ -35,6 +35,12 @@ def parse(data):
     return ents if ok else None
 
 
+def labels_table(rows):
+    """A record labels table (patch/labels.c) of [(path, size)], none with a label."""
+    body = b''.join(struct.pack('<III', k, s, 0) for k, s in sorted((key(p), s) for p, s in rows))
+    return struct.pack('<5I', 0x424c314d, len(body) // 12, 0, 0, fnv_plain(body)) + body
+
+
 def seeded(entries=(), **kw):
     m = Machine()
     if entries or kw: m.fs[DUR] = table(entries, **kw)
@@ -550,6 +556,7 @@ def home_tests(ctx):
         for i, p in enumerate(paths(n)):
             m.files[p] = 5_000_000 + i; m.durations[p] = 100 + i
         if seed: m.fs[DUR] = table(seed)
+        m.fs[HC.LABELS] = labels_table((p, 5_000_000 + i) for i, p in enumerate(paths(n)))   # every song's label read (none): the label stage after the durations finds nothing to do
         return m
 
     def lscan(m, limit=60):
@@ -582,8 +589,10 @@ def home_tests(ctx):
     new = fired(m, 'hc_on_dpoll', 80000000)
     ents = parse(m.fs[DUR])
     expect(ents is not None and sorted(ents) == sorted((key(p), 5_000_000 + i, 100 + i) for i, p in enumerate(paths(6))), 'done: every measured length was merged into the table and written')
-    expect(HC.shown_calls(m, new) == [('widget_set_visible', 0), ('widget_set_sensitive', 0)] and ('widget_move', HC.lv(m), 0, O['HOME_PAD']) in new and build_state(m)['jobs'] == 0 and 'pthread_join' in [c[0] for c in new]
-           and not [c for c in new if c[0] == 'timer_add'], 'the line is hidden and insensitive, the list is back, the worker joined, the set freed, no more timers')
+    expect(HC.shown_calls(m, new) == [('widget_set_visible', 0), ('widget_set_sensitive', 0)] and ('widget_move', HC.lv(m), 0, O['HOME_PAD']) in new and 'pthread_join' in [c[0] for c in new]
+           and [c[:2] for c in new if c[0] == 'timer_add'] == [('timer_add', LSCAN)], 'the line is hidden and insensitive, the list is back, the worker joined; the record labels\' scan follows')
+    new = lscan(m)
+    expect(build_state(m)['jobs'] == 0 and 'pthread_create' not in [c[0] for c in new] and not [c for c in new if c[0] == 'timer_add'], 'every label read already: the set freed, no worker, no more timers')
 
     # 3. A complete table: nothing is queued, nothing is shown, and the next foreground does not read the library again
     m = machine(6, seed=[(p, 5_000_000 + i, 100 + i) for i, p in enumerate(paths(6))])

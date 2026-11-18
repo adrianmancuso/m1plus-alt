@@ -24,6 +24,7 @@
 #endif
 #include "covercache.h"
 #include "durations.h"
+#include "labels.h"
 #include "common.h"
 #include "fnv.h"
 
@@ -1212,6 +1213,8 @@ static struct {
     img_t img; /* its image (same rules) */
     volatile int
         truncated; /* cc_build_near_step could not queue an album (the set was full, or no memory): cc_build_truncated, kept like stalled */
+    char *
+        labels; /* CC_LABELS: cap labels of LB_MAX bytes, job i's at i * LB_MAX (written by the worker before done advances) */
 } cb __attribute__((section(".scratch")));
 
 /* Ours, zero-filled like stock's parse_cover_mutex (a default mutex): serialises a job's start (cur, began, seq) with build_watch's claim of a stalled job. Never held over extraction or file I/O. */
@@ -1684,6 +1687,8 @@ static void *cc_worker(void *unused) {
     while (cb.done < cb.total && !cb.cancelled) {
         if (cb.mode == CC_DURATIONS)
             cb.jobs[cb.done].sec = (unsigned)dur_probe(cb.jobs[cb.done].track);
+        else if (cb.mode == CC_LABELS)
+            lb_probe(cb.jobs[cb.done].track, cb.labels + (unsigned)cb.done * LB_MAX, LB_MAX);
         else
             build_art(&cb.jobs[cb.done]);
         ++cb.done;
@@ -1697,8 +1702,10 @@ static void build_free(void) {
     for (i = 0; i < cb.total; ++i)
         if (cb.jobs) free(cb.jobs[i].track);
     free(cb.jobs);
+    free(cb.labels);
     ap_lib_free();
     cb.jobs = (job_t *)0;
+    cb.labels = (char *)0;
     cb.cap = 0;
     cb.total = cb.done = cb.cancelled = 0;
 }
@@ -1715,10 +1722,17 @@ int cc_build_open(unsigned capacity, int mode) {
     build_reap();
     if (cb.jobs) return 0;
     build_recover();
-    if (capacity > (mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS))
-        capacity = mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : CC_MAX_JOBS;
+    {
+        unsigned max = mode == CC_DURATIONS ? CC_MAX_LEN_JOBS : mode == CC_LABELS ? CC_MAX_LBL_JOBS : CC_MAX_JOBS;
+        if (capacity > max) capacity = max;
+    }
     cb.jobs = calloc(capacity ? capacity : 1, sizeof(job_t));
-    if (!cb.jobs) return 0;
+    cb.labels = mode == CC_LABELS && cb.jobs ? calloc(capacity ? capacity : 1, LB_MAX) : (char *)0;
+    if (!cb.jobs || (mode == CC_LABELS && !cb.labels)) {
+        free(cb.jobs);
+        cb.jobs = (job_t *)0;
+        return 0;
+    }
     ap_lib_free();
     cb.cap = capacity;
     cb.mode = mode;
@@ -1729,7 +1743,7 @@ int cc_build_open(unsigned capacity, int mode) {
 int cc_build_add(const char *track, unsigned key) {
     char path[64];
     job_t *j;
-    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !key || !track || !*track) return 0;
+    if (!cb.jobs || cb.running || cb.mode >= CC_DURATIONS || !key || !track || !*track) return 0;
     if ((cb.mode == CC_MISSING && !access(cc_path(path, sizeof path, key, ""), F_OK)) ||
         !access(cc_path(path, sizeof path, key, ".bad"), F_OK))
         return 0;
@@ -1751,7 +1765,7 @@ int cc_build_add_artist(const char *track, const char *artist, int force) {
         artist =
             lead; /* the artist split is on: the album is the first name's (a folder of collaborations stays pure for the artist it is under) */
     key = ap_key(artist);
-    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !track || !*track) return 0;
+    if (!cb.jobs || cb.running || cb.mode >= CC_DURATIONS || !track || !*track) return 0;
     if (key == ap_key("Unknown Artist"))
         key = 0; /* no artist: it joins the snapshot (a folder it is in is no artist's own) but gets no job */
     if (!ap_lib_add(track, key) || !key || !ap_first(key)) return 0;
@@ -1770,7 +1784,7 @@ int cc_build_artist_ok(void) { return ap_lib_ok(); }
 
 int cc_build_add_recheck(const char *tracks, unsigned key) {
     job_t *j;
-    if (!cb.jobs || cb.running || cb.mode == CC_DURATIONS || !key || !tracks || !*tracks) return 0;
+    if (!cb.jobs || cb.running || cb.mode >= CC_DURATIONS || !key || !tracks || !*tracks) return 0;
     if ((unsigned)cb.total >= cb.cap) return -1;
     j = &cb.jobs[cb.total];
     j->track = strdup(tracks);
@@ -1783,7 +1797,7 @@ int cc_build_add_recheck(const char *tracks, unsigned key) {
 int cc_build_add_dur(const char *track, unsigned key, unsigned size) {
     int i;
     job_t *j;
-    if (!cb.jobs || cb.running || cb.mode != CC_DURATIONS || !key || !track || !*track) return 0;
+    if (!cb.jobs || cb.running || cb.mode < CC_DURATIONS || !key || !track || !*track) return 0;
     for (i = 0; i < cb.total; ++i)
         if (cb.jobs[i].key == key) return 0; /* one file, one measurement (the tracks of a CUE image) */
     if ((unsigned)cb.total >= cb.cap) return -1;
@@ -1798,6 +1812,12 @@ int cc_build_add_dur(const char *track, unsigned key, unsigned size) {
 int cc_build_dur(int i, unsigned *key, unsigned *size, unsigned *sec) {
     if (!cb.jobs || cb.mode != CC_DURATIONS || i < 0 || i >= cb.done) return 0;
     *key = cb.jobs[i].key, *size = cb.jobs[i].size, *sec = cb.jobs[i].sec;
+    return 1;
+}
+
+int cc_build_lbl(int i, unsigned *key, unsigned *size, const char **label) {
+    if (!cb.jobs || cb.mode != CC_LABELS || i < 0 || i >= cb.done) return 0;
+    *key = cb.jobs[i].key, *size = cb.jobs[i].size, *label = cb.labels + (unsigned)i * LB_MAX;
     return 1;
 }
 
@@ -1850,13 +1870,13 @@ int cc_build_start(void) {
         cc_build_stop(); /* nothing to build: free the job array */
         return 0;
     }
-    if (cb.mode != CC_DURATIONS) {
+    if (cb.mode < CC_DURATIONS) {
         mkdir(CARD_DIR, 0755); /* the folder, then the cache in it (EEXIST is fine) */
         mkdir(ART_DIR, 0755);
         mkdir(AP_DIR, 0755);
     }
     cb.exited = 0;
-    if ((cb.mode != CC_DURATIONS && !card_space(ART_DIR)) ||
+    if ((cb.mode < CC_DURATIONS && !card_space(ART_DIR)) ||
         pthread_create(&cb.thread, (void *)0, cc_worker, (void *)0)) {
         cc_build_stop(); /* no card, no space, or no thread: the caller shows what is cached already */
         return 0;
@@ -1876,7 +1896,7 @@ static void build_watch(void) {
     int i = cb.done;
     snap_t
         s; /* the claimed job, copied under cb_mutex: after the unlock only this is read (the worker moves on, and rewrites cb.img) */
-    if (!cb.running || cb.mode == CC_DURATIONS || i >= cb.total) return;
+    if (!cb.running || cb.mode >= CC_DURATIONS || i >= cb.total) return;
     if (i != cb.seen || cb.seq != cb.seen_seq) {
         cb.seen = i, cb.seen_seq = cb.seq, cb.at = now;
         return;

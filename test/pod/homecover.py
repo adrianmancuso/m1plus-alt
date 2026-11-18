@@ -3,7 +3,7 @@ albums that have no cache file. Hidden when nothing is missing and after the bui
 and on destroy and is offered again at the next foreground; it never starts while another set (Cover Flow, Albums) holds the worker."""
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-import os, re
+import os, re, struct
 import pod_recent
 import pod_i18n
 
@@ -20,6 +20,7 @@ def artist_file(name): return '/mnt/mmc/.m1plus/artists/a%08x-44.jpg' % (fnv(O['
 
 REQ = '/mnt/data/m1plus/covers-rebuild'
 STAMP, DB = '/mnt/mmc/.m1plus/cache-stamp', '/mnt/data/database.db'
+LABELS = '/mnt/mmc/.m1plus/labels'
 
 
 def hash_of(n): return sum(key_of(i) for i in range(n)) & 0xffffffff
@@ -30,7 +31,7 @@ def stamp_text(n, covers=True, tracks=True, h=None, artists=True):
     return (f'covers {n} {h:08x}\n' if covers else '') + (f'tracks {n} {h:08x}\n' if tracks else '') + (f'artists {n} {h:08x}\n' if artists else '')
 
 
-def home_machine(n=8, missing=(), empty=(), rebuild=False, stamp='stale', start=True, songs=False):
+def home_machine(n=8, missing=(), empty=(), rebuild=False, stamp='stale', start=True, songs=False, labels=True):
     """The Home instance's widgets (plain ones: the line, the list_view, the scroll view and its bar) and n albums in the stock list, each with a cache
     file unless it is in missing (no file) or empty (the zero-length 'no art' marker). stamp: the card's stamp text; 'stale' (the default) a stamp of another library, so the pill
     shows when the scan begins (the first open since the boot reads the library); None: no stamp (the waiting pill shows at once)."""
@@ -38,6 +39,7 @@ def home_machine(n=8, missing=(), empty=(), rebuild=False, stamp='stale', start=
     m.fs[SORT_FILE] = b'0\n'
     if stamp == 'stale': stamp = stamp_text(n, h=hash_of(n) ^ 0x10)
     if stamp is not None: m.fs[STAMP] = stamp.encode()
+    if labels: m.fs[LABELS] = struct.pack('<5I', 0x424c314d, 0, 0, 0, O['FNV_SEED'])   # an empty record labels table (patch/labels.c): its absence makes the tracks line stale
     m.dirs.add('/mnt/mmc/.m1plus')
     m.db = {DB: [100, 0, 4096]}
     if rebuild: m.fs[REQ] = b'1\n'   # Settings > Library > Rebuild Covers was confirmed
@@ -969,6 +971,7 @@ def check_tests(ctx):
     finish_worker(m, [1, 6])
     new = fired(m, 'hc_on_poll', 40000000)
     new += fired(m, 'hc_on_dscan')   # (the songs: one CUE track, nothing to measure)
+    new += fired(m, 'hc_on_dscan')   # (then its record label: the image file is not on the card, nothing to read)
     expect(m.fs[STAMP].decode().startswith('covers 7 ') and 'tracks 7 ' in m.fs[STAMP].decode() and not pill_up(m), 'the pass done: the stamp holds the new count and hash for both parts, the pill hidden')
 
     # 5. The size of the -wal file counts too.
@@ -1016,7 +1019,7 @@ def check_tests(ctx):
     expect(STAMP not in m.fs and not pill_up(m) and 'pthread_create' not in m.names(), 'the album list could not be copied: nothing is stamped, the pill hides')
     m = home_machine(3, stamp=stamp_text(3, tracks=False)); scan(m)
     expect('tracks' not in m.fs[STAMP].decode() and not pill_up(m), 'no songs although there are albums: a failed read, no tracks line, the pill hides')
-    m = home_machine(3, stamp=stamp_text(3, tracks=False), songs=True); m.deque_fail = False; scan(m); fired(m, 'hc_on_dscan')
+    m = home_machine(3, stamp=stamp_text(3, tracks=False), songs=True); m.deque_fail = False; scan(m); fired(m, 'hc_on_dscan'); fired(m, 'hc_on_dscan')   # (the durations, then the labels)
     expect(m.fs[STAMP].decode() == stamp_text(3), 'songs read: the tracks line is written')
 
     # 7d. A chain of chunks resumes from a cursor: 4002 albums missing, the first 4000 tracks gone (the worker leaves no file): the second chunk queues the other two, then the line is written, no third pass.
