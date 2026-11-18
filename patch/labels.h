@@ -46,5 +46,8 @@ const char *lb_name(unsigned i);
 const char *lb_path(const char *path);
 /* The two labels are one (ASCII case aside): the Labels page lists them once and a label's albums take either. */
 int lb_same(const char *a, const char *b);
+/* The labels (acquired) as a new deque of class rows (REC_TYPE 4, REC_ID -3 - i, REC_TITLE lb_name(i), copied): the Labels page's rows and Search's. NULL when there is none,
+ * more than max, or no memory. */
+void *lb_rows(unsigned max);
 void lb_clear(void); /* the file deleted and the table in memory emptied */
 unsigned lb_epoch(void); /* counts the clears */

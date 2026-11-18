@@ -568,28 +568,6 @@ static int ar_on_destroy(void *ctx, void *e) {
 static void *ar_pre __attribute__((
     section(".scratch"))); /* a source's list already read by ar_on_gen, which ar_load takes instead of asking again */
 
-/* The Labels page's rows: one per label of the table (lb_name; the table keeps one spelling of each, ASCII case aside), each a class row (REC_TYPE 4, REC_ID <= -3) titled
- * with the name. NULL when there is none or no memory. */
-static void *ar_label_rows(void) {
-    unsigned i, n = lb_count();
-    void *q = n && n <= MAX_ARTISTS ? _create_deque("stSongInfo") : (void *)0;
-    if (!q) return (void *)0;
-    deque_init(q);
-    for (i = 0; i < n; ++i) {
-        unsigned rec[REC_SIZE / 4];
-        memset(rec, 0, sizeof rec);
-        I(rec, REC_ID) = -3 - (int)i;
-        *(const char **)((char *)rec + REC_TITLE) = lb_name(i);
-        I(rec, REC_TYPE) = 4;
-        _deque_push_back(q, rec); /* (the stock copy: the record and its strings) */
-    }
-    if (!deque_size(q)) {
-        deque_destroy(q);
-        return (void *)0;
-    }
-    return q;
-}
-
 static void ar_load(int keep) {
     void *list;
     int h, off = keep ? az_off(&ar.al) : 0, st = LS_ST_READY;
@@ -620,7 +598,7 @@ static void ar_load(int keep) {
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
         if (ar.count) ar_sort();
     } else if (ar.cls == CLASS_LABELS) {
-        if ((list = ar_label_rows()) != (void *)0) {
+        if ((list = lb_rows(MAX_ARTISTS)) != (void *)0) {
             ar.artists = list, ar.count = deque_size(list);
             if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
             ar_sort();
@@ -716,7 +694,7 @@ static void ar_set_type(int type) {
     ar_load(0);
 }
 
-/* The card's rows: Search Artists opens the Search page scoped to artists (the library search where that will not open); Artists / Album Artists set the type; the Name row reverses the order
+/* The card's rows: Search Artists opens the Search page scoped to artists (the Labels page's: to labels) (the library search where that will not open); Artists / Album Artists set the type; the Name row reverses the order
  * (saved first: a save that fails leaves the order and its tick). The card closes. */
 static int ar_on_item(void *ctx, void *e) {
     int k = (int)(long)ctx;
@@ -726,7 +704,7 @@ static int ar_on_item(void *ctx, void *e) {
     if (k == VS_SEARCH) {
         if (ar.src)
             search_open_src_in(ar.src, SEARCH_ARTISTS); /* the server's search */
-        else if (search_open_in(SEARCH_ARTISTS) < 0)
+        else if (search_open_in(ar.cls == CLASS_LABELS ? SEARCH_LABELS : SEARCH_ARTISTS) < 0)
             search_open();
     } else if (k == VS_SORTS || k == VS_SORTS + 1) {
         ar_set_type(k == VS_SORTS + 1);
@@ -808,10 +786,15 @@ static int ar_open_page(int home, const lib_src_t *src) {
                    1); /* the corners cut in the alpha: the pressed row's fill shows behind the circle */
         ar.g.person = 1; /* a portrait picture is cut from its top third, as the artist cache cuts it */
     }
+    if (ar.cls == CLASS_LABELS) {
+        void *w = widget_lookup(ar.win, "vs_label6", 1); /* the asset's Search row says Search Artists */
+        if (w) widget_set_tr_text(w, "Search Labels");
+    }
     if (vs_bind(
             &ar.vs, ar.win, ar_on_item, ar_on_scrim,
-            ar.cls == CLASS_ARTISTS && !ar.src
-                ? (1u << 0) | VS_WITH_VIEWS | VS_WITH_SEARCH
+            ar.cls == CLASS_ARTISTS && !ar.src ? (1u << 0) | VS_WITH_VIEWS | VS_WITH_SEARCH
+            : ar.cls == CLASS_LABELS
+                ? (1u << 0) | VS_WITH_SEARCH /* Search scoped to the labels */
                 : (1u << 0) |
                       (ar.cls == CLASS_ARTISTS && (ls_caps(ar.src) & LS_CAP_SEARCH)
                            ? VS_WITH_SEARCH

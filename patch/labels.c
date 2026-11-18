@@ -611,3 +611,23 @@ unsigned lb_pass_end(void) {
     }
     return gone;
 }
+
+void *lb_rows(unsigned max) {
+    unsigned i, n = lb_count();
+    void *q = n && n <= max ? _create_deque("stSongInfo") : (void *)0;
+    if (!q) return (void *)0;
+    deque_init(q);
+    for (i = 0; i < n; ++i) {
+        unsigned rec[REC_SIZE / 4];
+        memset(rec, 0, sizeof rec);
+        I(rec, REC_ID) = -3 - (int)i;
+        *(const char **)((char *)rec + REC_TITLE) = lb_name(i);
+        I(rec, REC_TYPE) = 4;
+        _deque_push_back(q, rec); /* (the stock copy: the record and its strings) */
+    }
+    if (!deque_size(q)) {
+        deque_destroy(q);
+        return (void *)0;
+    }
+    return q;
+}

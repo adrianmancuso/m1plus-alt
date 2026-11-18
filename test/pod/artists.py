@@ -2652,6 +2652,14 @@ def label_page_tests(ctx):
            'the Labels page opens our Artists page and asks no stock class')
     expect(shown(m) == ['Columbia', 'ECM', 'Philips'], f'one row per label, sorted by name ({shown(m)})')
     expect(('widget_set_text_utf8', m.widgets['label_title'], 'Labels') in calls, 'the title is "Labels"')
+    expect(('widget_set_tr_text', m.widgets['vs_label6'], 'Search Labels') in calls, 'the card\'s Search row says Search Labels')
+    m.click('btn_more')
+    expect(vis(m, 'vs_item6') == (1, 1) and vis(m, 'vs_item4') == (0, 0), 'the "..." card: Search Labels and Name, no Show group')
+    m.calls = []
+    m.click('vs_item6', count=40000000)
+    expect(('window_open', 'm1plus_search') in m.calls, 'Search Labels opens the Search page')
+    m = machine()
+    m.call(open_, a0=P.AR_LABELS, count=40000000)
 
     # a tap: the label's albums, its name as the title, no Search, no Cover Flow
     m.calls = []

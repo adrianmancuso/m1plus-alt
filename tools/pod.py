@@ -52,7 +52,7 @@ SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'libload.c', 'menu.c', 'coverca
 BN_KEEP = ['bd_fat', 'bd_present']
 
 # Record labels (patch/labels.c): the reader and the table, kept by the linker until the Home pass and the Labels pages call them; test/pod/labels.py calls these
-LB_KEEP = ['lb_probe', 'lb_acquire', 'lb_release', 'lb_file', 'lb_song', 'lb_merge', 'lb_pass_begin', 'lb_pass_seen', 'lb_pass_end', 'lb_has', 'lb_count', 'lb_name', 'lb_path', 'lb_same', 'lb_clear', 'lb_epoch']
+LB_KEEP = ['lb_probe', 'lb_acquire', 'lb_release', 'lb_file', 'lb_song', 'lb_merge', 'lb_pass_begin', 'lb_pass_seen', 'lb_pass_end', 'lb_has', 'lb_count', 'lb_name', 'lb_path', 'lb_same', 'lb_rows', 'lb_clear', 'lb_epoch']
 
 # Settings > Bluetooth control layer (patch/btset.c): the entry point the page (patch/btpage.c) does not call, kept by the linker; test/pod/btset.py calls these
 BS_KEEP = ['bs_codec_key']

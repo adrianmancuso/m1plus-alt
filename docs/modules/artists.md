@@ -98,6 +98,8 @@ sort is a small fraction of stock's own, which always runs first.
   search if that returns -1), the **Show** group `Artists` / `Album Artists` (glyphs
   `pod_ic_vsartist`, `pod_ic_vsalbumartist`; the tick follows `artist_type`) and the **Name** sort
   with its grey line A-Z / Z-A: four rows, `vs_glass4`.
+- **Labels**: `Search Labels` (`vs_label6` retitled at open; `search_open_in(SEARCH_LABELS)`) and
+  **Name**.
 - **Genres and Composers**: Name alone, `vs_glass1`, no hairline.
 - A tap on the ticked Name row reverses the order, saved first (`home_write_atomic`; a failed save
   changes nothing), then the list is built again from the top.

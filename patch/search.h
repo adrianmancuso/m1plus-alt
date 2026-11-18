@@ -10,13 +10,14 @@
  * (a Search page exists already, no memory, or the asset is not ours): the caller opens the stock search page. */
 int search_open(void);
 
-/* The same page scoped to one type: SEARCH_ARTISTS .. SEARCH_PLAYLISTS (the chip order; SEARCH_ALL is search_open). Its chip row shows that one chip, selected, and only that type is searched.
+/* The same page scoped to one type: SEARCH_ARTISTS .. SEARCH_LABELS (the chip order; SEARCH_ALL is search_open). Its chip row shows that one chip, selected, and only that type is searched.
  * 0 once the page is up; -1 as search_open, or for a scope that is not one of these. */
 #define SEARCH_ALL 0
 #define SEARCH_ARTISTS 1
 #define SEARCH_ALBUMS 2
 #define SEARCH_SONGS 3
 #define SEARCH_PLAYLISTS 4
+#define SEARCH_LABELS 5
 int search_open_in(int scope);
 
 /* The page over a library source (patch/libsrc.h): src NULL or &lib_stock is search_open. Another source (Navidrome): typing, debounced as usual, asks the server (sba_search) and the page shows
@@ -75,13 +76,14 @@ int search_open_src_in(const lib_src_t *src, int scope);
 #define SE_REC_X_W 44
 #define SE_REC_X_C 292 /* the centre of the x, which is POD_CROSS (12) px square */
 #define SE_BOTTOM 12 /* air under the last row (the pad's height instead while the keyboard is up) */
-#define SE_CHIPS 5 /* Top Results, Artists, Albums, Songs, Playlists */
+#define SE_CHIPS 6 /* Top Results, Artists, Albums, Songs, Playlists, Labels (the library only) */
 #define SE_MAX_ROWS 200
 #define SE_CAP_TOP 30 /* the rows of Top Results */
 #define SE_CAP_ARTISTS 100 /* ... and of each type's chip */
 #define SE_CAP_ALBUMS 100
 #define SE_CAP_SONGS 200
 #define SE_CAP_PLAYLISTS 100
+#define SE_CAP_LABELS 100
 #define SE_TICK_MS 40 /* the page's one timer: the debounce counts these, the covers load one a tick */
 #define SE_DEBOUNCE 5 /* ticks without a key before the results refresh: 200 ms */
 #define SE_DEBOUNCE_SRC 12 /* the same for a source, which asks a server: 480 ms */

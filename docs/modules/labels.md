@@ -60,9 +60,10 @@ Menu item 25 `Labels` (`ACT_ARTISTS` with `AR_LABELS` 64; Library group after Co
 the Artists page on our own class `CLASS_LABELS` (`0x4c42`, never given to a stock query). The page
 holds the table (`lb_acquire` at open, `lb_release` on destroy).
 
-- The rows are the table's labels (`ar_label_rows`: class rows, `REC_ID` -3 - index, the name in
+- The rows are the table's labels (`lb_rows(max)`: a new deque of class rows, `REC_ID` -3 - index, the name in
   `REC_TITLE`), sorted by the name keys as Artists are; Name A-Z / Z-A in `labels-sort`. The title is
-  "Labels"; with no label read yet the page says "No labels". The card has Name alone. The rows are
+  "Labels"; with no label read yet the page says "No labels". The card has Search Labels (the
+  asset's `vs_label6` retitled; [search](search.md) scoped to `SEARCH_LABELS`) and Name. The rows are
   read at open, not again while the page is up.
 - A tap is `albums_open_label(name)`: the Albums page in the saved mode on the library albums
   (`cc_albums`) whose first track's file has the label (`lb_path` of `REC_PATH`, `lb_same`), in

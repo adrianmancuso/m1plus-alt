@@ -6,7 +6,7 @@ import build, awtk_strings, awtk_style, pcregion, pod_i18n, pod_keyboard
 from awtk_text import Ttf, StbText
 
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', 'Name', '%s, %s', 'Band %d', 'Cassette', 'Vinyl', 'Labels'}   # translations that are the English word by design
+SAME_AS_ENGLISH = {'Cover Flow', 'Playlists', 'Playlist', 'Genres', 'Gain', 'Extras', 'Albums', 'Artists', 'Local', 'Name', '%s, %s', 'Band %d', 'Cassette', 'Vinyl', 'Labels', 'Label'}   # translations that are the English word by design
 SAME_AS_ENGLISH |= {'Crossfeed'}    # the audio term, written the same in the Latin-script languages (the playset docs list it)
 SAME_AS_ENGLISH |= {'Standby'}    # German and Italian write Standby as English does (the Battery History page's Since Last Charge card)
 SAME_AS_ENGLISH |= {'AutoEq'}    # the brand name (the Presets page's section header)
