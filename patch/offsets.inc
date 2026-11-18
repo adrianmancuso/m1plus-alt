@@ -932,6 +932,10 @@
 #define AL_HEAD_PILL_Y 148       /* the pills' y, 16 px under the name's box */
 #define AL_HEAD_END 188          /* where that block ends (AL_HEAD_PILL_Y + SG_PILL_H): the grid's first gap or the list's first row follows, as AL_PILLS_END */
 #define AL_HEAD_COLLAPSE 132     /* the navbar shows the small title once the name's box (its bottom, AL_NAME_Y + PH_NAME_H) has scrolled away */
+#define AL_LB_LOGO 96            /* a record label's albums page (patch/albums.c, docs/modules/labels.md "Label folder"): the logo, 96 px, fitted whole, at SG_TITLE_X under the large title */
+#define AL_LB_PITCH 22           /* the about text under it: lines in label_row_sub's style, SG_TITLE_W wide, at most AL_LB_LINES (the last cut with an ellipsis) */
+#define AL_LB_LINES 8
+#define AL_LB_GAP 12             /* the air under the logo and under the text */
 #define SG_BAR_PILL_W 145       /* the select bar's pills (Add to Playlist needs the room; the bar is below the rail, whose touch column ends at the bar's top) */
 #define SG_BAR_PILL_X1 165
 #define PL_BAR_PILL_W 300        /* the Playlists page's select bar has the one pill, Delete, across the bar (x SG_PILL_X0, a 10 px margin each side) */

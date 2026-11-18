@@ -44,7 +44,8 @@ and mode on that artist's or composer's albums.
   px); an empty list says "No albums".
 
 A record label's albums (`albums_open_label`) use the unscoped page on a filtered copy of the
-library list: [labels](labels.md#labels-page).
+library list: [labels](labels.md#labels-page). Its header adds the label folder's logo and about
+text under the large title ([labels](labels.md#label-folder)).
 
 ### Artist header
 

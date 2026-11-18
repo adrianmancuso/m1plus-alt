@@ -75,6 +75,7 @@
 #include "artistphoto.h"
 #include "coverflow.h"
 #include "entries.h"
+#include "pcdetail.h"
 
 /* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
 
@@ -169,6 +170,11 @@ static struct {
     /* a record label's albums (albums_open_label; NULL / NULL on every other page): label the name (heap), lrow the library Albums row of each album of the page's list (cc_open_album opens that row) */
     char *label;
     unsigned *lrow;
+    /* the label's folder (lb_extras): its logo (AL_LB_LOGO px, NULL none), its about text wrapped (lb_text wide chars, lb_ln lb_nl lines); lbh the room both take under the large title */
+    void *lb_logo;
+    unsigned *lb_text;
+    pw_line_t *lb_ln;
+    int lb_nl, lbh;
 } al __attribute__((section(".scratch")));
 
 /* The room of the circle, when the artist page has none (no photo): everything under it is this much higher. */
@@ -179,7 +185,7 @@ static int al_rows(void) { return ((int)al.count + GRID_COLS - 1) / GRID_COLS; }
  * under the title: the block ends at AL_PILLS_END and the list's first row is GRID_ROW_GAP under it (the grid's first gap is its own). */
 static int al_top(void) {
     int end = al.head ? AL_HEAD_END - al_gone() : AL_PILLS_END;
-    return !al.pills ? SG_TITLE_H : al.list ? end + GRID_ROW_GAP : end;
+    return !al.pills ? SG_TITLE_H + al.lbh : al.list ? end + GRID_ROW_GAP : end;
 }
 /* The list's content is the az_t's (its top is al_top(), al_size keeps it; the section headers between the rows when the Title order has them). */
 static int al_gsec(void) { return !al.list && al.gz.nsec; } /* the grid has its decade sections now */
@@ -391,6 +397,53 @@ static void al_paint_head(void *canvas) {
     canvas_draw_image(canvas, al.hdr, src, dst);
 }
 
+/* A label's logo and about text under the large title, the parts inside the window (a text line wholly or not at all: AWTK does not clip text). */
+static void al_paint_label(void *canvas) {
+    int y = SG_TITLE_H - al_off(), k;
+    if (al.lb_logo) {
+        int top = y < 0 ? -y : 0, bottom = y + AL_LB_LOGO > GRID_VIEW_H ? GRID_VIEW_H - y : AL_LB_LOGO;
+        int src[4], dst[4];
+        if (bottom > top) {
+            src[0] = 0, src[1] = top, src[2] = AL_LB_LOGO, src[3] = bottom - top;
+            dst[0] = SG_TITLE_X, dst[1] = y + top, dst[2] = AL_LB_LOGO, dst[3] = bottom - top;
+            canvas_draw_image(canvas, al.lb_logo, src, dst);
+        }
+        y += AL_LB_LOGO + AL_LB_GAP;
+    }
+    if (!al.lb_nl) return;
+    widget_prepare_text_style(al.st_sub, canvas);
+    for (k = 0; k < al.lb_nl; ++k, y += AL_LB_PITCH) {
+        int rect[4];
+        if (y < 0 || y + AL_LB_PITCH > GRID_VIEW_H) continue;
+        rect[0] = SG_TITLE_X, rect[1] = y, rect[2] = SG_TITLE_W, rect[3] = AL_LB_PITCH;
+        canvas_draw_text_in_rect(canvas, al.lb_text + al.lb_ln[k].start, (unsigned)al.lb_ln[k].len, rect);
+    }
+}
+
+/* The label's folder, once at open: the logo decoded (fitted whole, nothing cut), the about text wrapped to SG_TITLE_W; lbh their room. What is missing or does not decode takes none. */
+static void al_label_head(void) {
+    char url[LB_MAX + 48], *about = calloc(LB_ABOUT, 1);
+    unsigned *px;
+    pd_t *d;
+    int n = 0;
+    lb_extras(al.label, url, sizeof url, about, about ? LB_ABOUT : 0);
+    if (url[0] && (al.lb_logo = ap_bitmap(AL_LB_LOGO, &px)) != (void *)0) {
+        int ok = cc_decode_fit(al.win, url, 1, AL_LB_LOGO, 0, px);
+        bitmap_unlock_buffer(al.lb_logo);
+        if (!ok) bitmap_destroy(al.lb_logo), al.lb_logo = (void *)0;
+    }
+    if (about && about[0] && (al.lb_text = calloc(LB_ABOUT + 1, 4)) != (unsigned *)0 &&
+        (al.lb_ln = calloc(AL_LB_LINES, sizeof *al.lb_ln)) != (pw_line_t *)0 &&
+        (d = calloc(1, sizeof *d)) != (pd_t *)0) {
+        tk_utf8_to_utf16_ex(about, strlen(about), al.lb_text, LB_ABOUT);
+        while (n < LB_ABOUT && al.lb_text[n]) ++n;
+        al.lb_nl = n ? pd_lines(d, al.st_sub, al.lb_text, n, SG_TITLE_W, AL_LB_LINES, al.lb_ln) : 0;
+        free(d);
+    }
+    free(about);
+    al.lbh = (al.lb_logo ? AL_LB_LOGO + AL_LB_GAP : 0) + (al.lb_nl ? al.lb_nl * AL_LB_PITCH + AL_LB_GAP : 0);
+}
+
 /* The view's own EVT_AFTER_PAINT: the visible cells or rows and nothing else. It draws what is resident and the placeholder for the rest; it
  * decodes nothing and arms no timer (al_on_load does that). The canvas origin is the content view's, which the scroll_view has moved up by
  * yoffset: it is moved back down by that for the duration of the paint (what canvas_translate does, CANVAS_OY), so the window's top is 0. */
@@ -401,6 +454,7 @@ static int al_on_paint(void *ctx, void *e) {
     if (!canvas || !al.view || !al.g.tiles || !al.count) return RET_OK;
     I(canvas, CANVAS_OY) += off;
     if (al.circ) al_paint_head(canvas);
+    if (al.lbh) al_paint_label(canvas);
     if (al.list)
         al_paint_list(canvas);
     else
@@ -917,6 +971,9 @@ static int al_on_destroy(void *ctx, void *e) {
     free(al.ykey);
     free(al.order);
     if (al.label) lb_release();
+    if (al.lb_logo) bitmap_destroy(al.lb_logo);
+    free(al.lb_text);
+    free(al.lb_ln);
     free(al.label);
     free(al.lrow);
     memset(&al, 0, sizeof al);
@@ -1453,6 +1510,7 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     } else if (al.label) { /* a label's albums, the label as the title */
         az_fit(al.big, al.label);
         az_fit(al.small, al.label);
+        al_label_head();
         al.albums = al_label_list(&al.lrow);
         al.count = al.albums ? deque_size(al.albums) : 0;
         al.order = al_order();

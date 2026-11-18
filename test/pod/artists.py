@@ -2686,6 +2686,55 @@ def label_page_tests(ctx):
     m.call(PSYMS['al_on_destroy'], count=2000000)
     m.call(PSYMS['ar_on_destroy'], count=2000000)
 
+    # the label's folder (/mnt/mmc/Labels/<label>, any case): its logo and about text under the title, the rows below them
+    LD = '/mnt/mmc/Labels'
+    def with_folder(logo=True, folder=True, about=b'Founded  in 1887.\nHome of Miles Davis, Bob Dylan and many more artists of every kind.'):
+        mm = machine()
+        mm.listing[LD] = [('.', 4), ('COLUMBIA', 4), ('Philips', 8)]
+        if folder: mm.listing[LD + '/COLUMBIA'] = [('About.TXT', 8)] + ([('logo.png', 8)] if logo else [])
+        if about is not None: mm.fs[LD + '/COLUMBIA/About.TXT'] = about
+        mm.images['file://' + LD + '/COLUMBIA/logo.png'] = (4, 2, bytes([200, 0, 0, 255]) * 8)
+        mm.call(open_, a0=P.AR_LABELS, count=40000000)
+        mm.calls = []
+        mm.call(PSYMS['ar_open'], a0=0, count=40000000)
+        return mm
+    def paint(mm, off):
+        mm.canvas = mm.alloc(0x80); mm.oy_canvas = mm.canvas
+        ev = mm.paint_event()
+        mm.setword(mm.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+        mm.texts.clear(); mm.blits.clear()
+        mm.setword(mm.sv + SC_YOFF, off)
+        mm.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+        return list(mm.blits), list(mm.texts)
+    LOGO, PITCH, GAP = O['AL_LB_LOGO'], O['AL_LB_PITCH'], O['AL_LB_GAP']
+    m = with_folder()
+    base = O['SG_TITLE_H'] + 2 * O['SG_HDR_H'] + 2 * ROWH
+    vh = [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view]
+    blits, texts = paint(m, 0)
+    logo = [b for b in blits if tuple(b[2]) == (O['SG_TITLE_X'], O['SG_TITLE_H'], LOGO, LOGO)]
+    about = [(t, r) for t, r in texts if r[0] == O['SG_TITLE_X'] and r[2] == O['SG_TITLE_W'] and r[1] >= O['SG_TITLE_H'] + LOGO]
+    joined = ' '.join(t.strip() for t, r in about)
+    expect(logo and 'file://' + LD + '/COLUMBIA/logo.png' in m.loads, f'the logo, found in any case, fitted at the title\'s left under it ({blits[:3]})')
+    expect(about and joined.startswith('Founded in 1887. Home of Miles Davis') and about[0][1][1] == O['SG_TITLE_H'] + LOGO + GAP
+           and all(b[1][1] - a[1][1] == PITCH for a, b in zip(about, about[1:])),
+           f'the about text under the logo (the harness measures no width: one line), its newline and double space one space ({about})')
+    expect(vh and vh[-1] == base + LOGO + GAP + len(about) * PITCH + GAP, f'the rows move down by the logo and the text ({vh[-1:]}, {base})')
+    blits, texts = paint(m, O['SG_TITLE_H'] + 40)
+    expect(any(tuple(b[1]) == (0, 40, LOGO, LOGO - 40) for b in blits) and not [t for t, r in texts if r[1] < 0], 'scrolled: the logo cut at the top, no text line drawn above the window')
+    m.call(PSYMS['al_on_destroy'], count=2000000)
+    expect(any(c[0] == 'bitmap_destroy' for c in m.calls), 'closing frees the logo')
+    m.call(PSYMS['ar_on_destroy'], count=2000000)
+    for what, kw, h in (('no logo', dict(logo=False), None), ('no folder', dict(folder=False), 0)):
+        mm = with_folder(**kw)
+        vh = [c[3] for c in mm.calls if c[0] == 'widget_resize' and c[1] == mm.view]
+        blits, texts = paint(mm, 0)
+        if h is None:
+            n = len([t for t, r in texts if r[0] == O['SG_TITLE_X'] and r[2] == O['SG_TITLE_W'] and r[1] >= O['SG_TITLE_H']])
+            expect(n == 1 and vh[-1] == base + n * PITCH + GAP and not [b for b in blits if tuple(b[2][2:]) == (LOGO, LOGO)],
+                   f'no logo: the text right under the title ({n}, {vh[-1:]})')
+        else:
+            expect(vh[-1] == base and not [b for b in blits if tuple(b[2][2:]) == (LOGO, LOGO)], 'no folder: the page as before')
+
     # a label of no library album: the page says No albums
     m = machine()
     m.call(open_, a0=P.AR_LABELS, count=40000000)

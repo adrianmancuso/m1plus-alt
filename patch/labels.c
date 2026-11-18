@@ -631,3 +631,50 @@ void *lb_rows(unsigned max) {
     }
     return q;
 }
+
+/* The entry of dir that is a folder (dir 1) or a regular file named one of names[0..nn) (ASCII case aside; an earlier name wins) as dir/entry into out; 1 when found. */
+static int lb_entry(const char *dir, int folder, const char *const *names, int nn, char *out, unsigned size) {
+    void *d = opendir(dir);
+    char *ent;
+    int best = nn, r;
+    if (!d) return 0;
+    while ((ent = readdir(d)) != (char *)0) {
+        const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
+        if (ent[10] != (folder ? 4 : 8)) continue;
+        for (r = 0; r < best; ++r)
+            if (!cc_nocase(name, names[r])) {
+                if ((unsigned)snprintf(out, size, "%s/%s", dir, name) < size) best = r;
+                break;
+            }
+    }
+    closedir(d);
+    return best < nn;
+}
+
+void lb_extras(const char *label, char *logo, unsigned lsize, char *about, unsigned asize) {
+    static const char *const pics[3] = {"logo.jpg", "logo.jpeg", "logo.png"}, *const txt[1] = {"about.txt"};
+    char dir[LB_MAX + sizeof LB_DIR + 1], path[sizeof dir + 16];
+    int fd, n = 0, r, i, o;
+    if (lsize) logo[0] = 0;
+    if (asize) about[0] = 0;
+    if (!label || !*label || !lb_entry(LB_DIR, 1, &label, 1, dir, sizeof dir)) return;
+    if (lsize > 8 && lb_entry(dir, 0, pics, 3, path, sizeof path) && strlen(path) + 8 <= lsize)
+        snprintf(logo, lsize, "file://%s", path);
+    if (asize < 2 || !lb_entry(dir, 0, txt, 1, path, sizeof path) || (fd = open(path, O_RDONLY, 0)) < 0) return;
+    while (n < (int)asize - 1 && (r = read(fd, about + n, asize - 1 - (unsigned)n)) > 0) n += r;
+    close(fd);
+    for (i = o = 0; i < n; ++i) { /* control characters (line ends) as one space; no leading or trailing space */
+        char c = (unsigned char)about[i] < 32 ? ' ' : about[i];
+        if (c == ' ' && (!o || about[o - 1] == ' ')) continue;
+        about[o++] = c;
+    }
+    if (o) { /* a character the size cut is dropped */
+        int k = o - 1;
+        unsigned char c;
+        while (k > 0 && ((unsigned char)about[k] & 0xc0) == 0x80) --k;
+        c = (unsigned char)about[k];
+        if (c >= 0xc0 && o - k < (c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : 2)) o = k;
+    }
+    while (o && about[o - 1] == ' ') --o;
+    about[o] = 0;
+}

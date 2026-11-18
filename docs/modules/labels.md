@@ -1,7 +1,8 @@
 # Record labels
 
 **Sources:** `patch/labels.c`, `patch/labels.h`, the `CC_LABELS` mode in `patch/covercache.c`, the
-label stage in `patch/homecover.c`, the Labels page in `patch/artists.c` and `patch/albums.c`.
+label stage in `patch/homecover.c`, the Labels page in `patch/artists.c` and `patch/albums.c`
+(the label folder's logo and about text).
 **Tests:** `test/pod/labels.py`, `test/pod/artists.py` (`label_page_tests`).
 
 The stock database has no label column, so each file's record label is read from its tags on the
@@ -71,3 +72,28 @@ holds the table (`lb_acquire` at open, `lb_release` on destroy).
   its first track's. The card has the views and orders but no Search; the Cover Flow button is
   hidden and insensitive. An album tap opens its library row (`cc_open_album(NULL, 0, lrow[row])`).
   The list is found again on foreground; an empty one says "No albums".
+
+## Label folder
+
+`lb_extras(label, logo, lsize, about, asize)` reads the label's folder under `/mnt/mmc/Labels`
+(`LB_DIR`). The folder's name matches the label in any ASCII case.
+
+- **Logo:** the folder's `logo.jpg`, `logo.jpeg` or `logo.png` (any case; the earlier name wins),
+  returned as a `file://` URL.
+- **About text:** the first `LB_ABOUT - 1` bytes of `about.txt`.
+  - Control characters and line ends become one space.
+  - Runs of spaces collapse; the ends are trimmed.
+  - A UTF-8 character cut by the size is dropped.
+- Either is empty when missing.
+
+A label's Albums page reads the folder once at open (`al_label_head` in `patch/albums.c`). Under
+the large title it shows:
+
+- the logo, decoded once, fitted whole into `AL_LB_LOGO` (96) px at `SG_TITLE_X`;
+- under the logo, the about text in `label_row_sub`'s style, wrapped to `SG_TITLE_W`, at most
+  `AL_LB_LINES` (8) lines of `AL_LB_PITCH` (22) px, with an ellipsis ending a cut last line.
+
+`AL_LB_GAP` (12) px follows each part. The rows move down by the room both take. A part that is
+missing, or a logo that does not decode, takes no room. The header is painted by the page's own
+`EVT_AFTER_PAINT`, so a label with no albums shows only "No albums". Paragraph breaks in
+`about.txt` are not kept.
