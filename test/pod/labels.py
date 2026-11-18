@@ -72,6 +72,24 @@ def tpub(ver, s, enc=0): return frame(ver, 'TPB' if ver == 2 else 'TPUB', bytes(
 def txxx(ver, desc, s, enc=0): return frame(ver, 'TXX' if ver == 2 else 'TXXX', bytes([enc]) + text(enc, desc) + text(enc, s))
 
 
+def box(t, body): return struct.pack('>I', 8 + len(body)) + t.encode('latin-1') + body
+
+
+def freeform(name, value, ty=1, mean='com.apple.iTunes'):
+    """An iTunes ---- item: mean, name, data (type ty: 1 UTF-8, 2 UTF-16BE)."""
+    v = value.encode('utf-16-be') if ty == 2 else value.encode()
+    return box('----', box('mean', b'\0' * 4 + mean.encode()) + box('name', b'\0' * 4 + name.encode()) + box('data', struct.pack('>II', ty, 0) + v))
+
+
+def m4a(*items, mdat=b'\0' * 64, moov_last=False, fullbox=True, cover=0, udta=True):
+    """An M4A: ftyp, mdat, moov/udta/meta/ilst with items (and a cover of `cover` bytes), moov after mdat when moov_last."""
+    ilst = (box('covr', box('data', struct.pack('>II', 13, 0) + b'\xaa' * cover)) if cover else b'') + box('\xa9nam', box('data', struct.pack('>II', 1, 0) + b'Song')) + b''.join(items)
+    meta = box('meta', (b'\0' * 4 if fullbox else b'') + box('hdlr', b'\0' * 8 + b'mdirappl' + b'\0' * 9) + box('ilst', ilst))
+    moov = box('moov', box('mvhd', b'\0' * 100) + (box('udta', meta) if udta else meta))
+    head, data = box('ftyp', b'M4A \0\0\0\0M4A mp42isom'), box('mdat', mdat)
+    return head + (data + moov if moov_last else moov + data)
+
+
 def id3(ver, *frames, padding=64, after=b'\xff\xfb\x90\x00' + b'\0' * 400):
     body = b''.join(frames) + b'\0' * padding
     return b'ID3' + bytes([ver, 0, 0]) + syncsafe(len(body)) + body + after
@@ -164,6 +182,19 @@ def probe_tests(ctx):
         'MP3 no label': (id3(3, frame(3, 'TIT2', b'\0Song')), ''),
         'FLAC behind an ID3 tag': (id3(3, frame(3, 'TIT2', b'\0x'), after=flac('LABEL=Planet Mu')), 'Planet Mu'),
         'ID3 label wins over the FLAC behind it': (id3(3, tpub(3, 'Outer'), after=flac('LABEL=Inner')), 'Outer'),
+        'M4A LABEL': (m4a(freeform('LABEL', 'INA-GRM')), 'INA-GRM'),
+        'M4A label, any case': (m4a(freeform('label', 'Warp')), 'Warp'),
+        'M4A LABEL beats ORGANIZATION and PUBLISHER': (m4a(freeform('PUBLISHER', 'P'), freeform('LABEL', 'L'), freeform('ORGANIZATION', 'O')), 'L'),
+        'M4A PUBLISHER': (m4a(freeform('PUBLISHER', 'Sub Pop')), 'Sub Pop'),
+        'M4A moov after a large mdat': (m4a(freeform('LABEL', 'Kompakt'), mdat=b'\0' * 400000, moov_last=True), 'Kompakt'),
+        'M4A after a 300 KB cover': (m4a(freeform('LABEL', 'Editions Mego'), cover=300000), 'Editions Mego'),
+        'M4A UTF-16 data': (m4a(freeform('LABEL', 'スペクトル', ty=2)), 'スペクトル'),
+        'M4A UTF-8 kept': (m4a(freeform('LABEL', 'Éditions')), 'Éditions'),
+        'M4A QuickTime meta (no version)': (m4a(freeform('LABEL', 'QT'), fullbox=False), 'QT'),
+        'M4A meta directly in moov': (m4a(freeform('LABEL', 'Direct'), udta=False), 'Direct'),
+        'M4A another freeform is not the label': (m4a(freeform('CATALOGNUMBER', 'X1'), freeform('iTunNORM', 'y')), ''),
+        'M4A a binary data item is not taken': (m4a(freeform('LABEL', 'bin', ty=0x15)), ''),
+        'M4A no label': (m4a(), ''),
         'a WAV': (b'RIFF' + b'\0' * 100, ''),
         'an empty file': (b'', ''),
         'garbage': (b'\xff' * 50, ''),
@@ -196,6 +227,19 @@ def probe_tests(ctx):
     expect(got == 'Cut', f'a field longer than the block is read to the block\'s end ({got!r})')
     m.fs['/i.mp3'] = b'ID3\4\0\0' + syncsafe(1 << 27) + b'TPUB' + syncsafe(1000) + b'\0\0' + b'\0' + b'A' * 10
     expect(probe(m, '/i.mp3')[1] == '', 'an ID3 tag that claims more than the file: the frame cut short is not taken')
+
+    good = m4a(freeform('LABEL', 'Raster'), moov_last=True)   # the moov (and its label) at the end, so every cut is through it
+    for cut in (8, 30, 60, len(good) // 2, len(good) - 4):
+        m.fs['/t.m4a'] = good[:cut]
+        n, got = probe(m, '/t.m4a')
+        expect(got == '', f'an M4A cut at {cut} bytes reads safely, without the label ({got!r})')
+    lie = bytearray(good); i = lie.index(b'ilst') - 4; lie[i:i + 4] = struct.pack('>I', 0xfffffff0)
+    m.fs['/l.m4a'] = bytes(lie)
+    expect(probe(m, '/l.m4a') == (0, ''), 'an M4A box that claims more than its parent is refused')
+    m.fs['/z.m4a'] = box('ftyp', b'M4A ') + struct.pack('>I', 0) + b'free' + b'\0' * 32
+    expect(probe(m, '/z.m4a') == (0, ''), 'an M4A whose last box runs to the end, no moov')
+    m.fs['/w.m4a'] = box('ftyp', b'M4A ') + struct.pack('>I', 1) + b'mdat' + struct.pack('>II', 1, 16) + b'\0' * 16 + box('moov', b'')
+    expect(probe(m, '/w.m4a') == (0, ''), 'an mdat past 4 GB stops the walk')
 
     # bounded: the picture in front of the comment is skipped by seeking, not read
     m = Machine()

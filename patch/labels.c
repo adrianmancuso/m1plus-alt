@@ -42,7 +42,9 @@ unsigned lb_key(const char *path) {
 
 static unsigned le32(const unsigned char *b) { return b[0] | b[1] << 8 | b[2] << 16 | (unsigned)b[3] << 24; }
 static unsigned be32(const unsigned char *b) { return (unsigned)b[0] << 24 | b[1] << 16 | b[2] << 8 | b[3]; }
-static unsigned sync32(const unsigned char *b) { return (b[0] & 0x7f) << 21 | (b[1] & 0x7f) << 14 | (b[2] & 0x7f) << 7 | (b[3] & 0x7f); }
+static unsigned sync32(const unsigned char *b) {
+    return (b[0] & 0x7f) << 21 | (b[1] & 0x7f) << 14 | (b[2] & 0x7f) << 7 | (b[3] & 0x7f);
+}
 
 /* n bytes at pos into buf; the bytes got. */
 static unsigned lb_rd(int fd, unsigned pos, void *buf, unsigned n) {
@@ -65,7 +67,8 @@ static int lb_put(char *out, unsigned size, const unsigned char *src, unsigned n
     while (n > i && src[n - 1] <= ' ') --n;
     if (n - i > size - 1) {
         n = i + size - 1;
-        while (n > i && (src[n] & 0xc0) == 0x80) --n; /* src[n] is where the cut falls: a continuation byte is backed off */
+        while (n > i && (src[n] & 0xc0) == 0x80)
+            --n; /* src[n] is where the cut falls: a continuation byte is backed off */
         while (n > i && src[n - 1] <= ' ') --n;
     }
     for (o = 0; i < n; ++i) out[o++] = (char)(src[i] < ' ' ? ' ' : src[i]);
@@ -99,7 +102,7 @@ static int lb_vorbis(const unsigned char *b, unsigned n, char *out, unsigned siz
         p += 4;
         if (l > n - p) l = n - p; /* cut by LB_READ: what is there is read */
         for (e = 0; e < l && b[p + e] != '='; ++e);
-        rank = e >= l ? 0
+        rank = e >= l                               ? 0
                : lb_keyis(b + p, e, "LABEL")        ? 3
                : lb_keyis(b + p, e, "ORGANIZATION") ? 2
                : lb_keyis(b + p, e, "PUBLISHER")    ? 1
@@ -120,7 +123,8 @@ static int lb_flac(int fd, unsigned pos, unsigned char *buf, char *out, unsigned
         unsigned len;
         if (lb_rd(fd, pos, h, 4) != 4) return 0;
         len = (unsigned)h[1] << 16 | h[2] << 8 | h[3];
-        if ((h[0] & 0x7f) == 4) return lb_vorbis(buf, lb_rd(fd, pos + 4, buf, len < LB_READ ? len : LB_READ), out, size);
+        if ((h[0] & 0x7f) == 4)
+            return lb_vorbis(buf, lb_rd(fd, pos + 4, buf, len < LB_READ ? len : LB_READ), out, size);
         if (h[0] & 0x80) return 0; /* the last block, and no comment */
         pos += 4 + len;
     }
@@ -218,7 +222,8 @@ static int lb_id3(int fd, const unsigned char *h, unsigned char *buf, char *out,
         if (ver == 3 && f[9] & 0xe0) rank = 0; /* compressed, encrypted or grouped: not read */
         if (ver == 4 && f[9] & 0x4f) rank = 0;
         n = fs < LB_READ ? fs : LB_READ;
-        if (rank > best && fs >= 2 && lb_rd(fd, pos + hl, buf, n) == n) { /* (a frame the file cuts short is not taken) */
+        if (rank > best && fs >= 2 &&
+            lb_rd(fd, pos + hl, buf, n) == n) { /* (a frame the file cuts short is not taken) */
             p = 1;
             if (txxx) {
                 p += lb_id3str(buf[0], buf + 1, n - 1, t, sizeof t);
@@ -232,6 +237,79 @@ static int lb_id3(int fd, const unsigned char *h, unsigned char *buf, char *out,
             }
         }
         pos += hl + fs;
+    }
+    return len;
+}
+
+/* The child box of type t in [pos, end) (at most 256 looked at): *at its start, *len its size; 0 when there is none. A 64-bit size past 4 GB and
+ * a box that overruns end stop the walk; size 0 runs to end. */
+static int lb_box(int fd, unsigned pos, unsigned end, const char *t, unsigned *at, unsigned *len) {
+    unsigned char h[16];
+    unsigned i;
+    for (i = 0; i < 256 && pos < end && end - pos >= 8; ++i) {
+        unsigned n, hdr = 8;
+        if (lb_rd(fd, pos, h, 16) < 8) return 0;
+        n = be32(h);
+        if (n == 1) {
+            if (be32(h + 8)) return 0;
+            n = be32(h + 12), hdr = 16;
+        } else if (!n)
+            n = end - pos;
+        if (n < hdr || n > end - pos) return 0;
+        if (lb_eq(h + 4, t, 4)) return *at = pos, *len = n, 1;
+        pos += n;
+    }
+    return 0;
+}
+
+/* An MP4 (M4A) file: the freeform iTunes items ----:com.apple.iTunes:LABEL, else :ORGANIZATION, else :PUBLISHER, under moov/udta/meta/ilst. */
+static int lb_mp4(int fd, unsigned char *buf, char *out, unsigned size) {
+    unsigned char h[8];
+    unsigned at, n, end, i, pos, best = 0;
+    int len = 0;
+    if (!lb_box(fd, 0, 0xffffffffu, "moov", &at, &n)) return 0;
+    end = at + n;
+    if (!(lb_box(fd, at + 8, end, "udta", &i, &n) && lb_box(fd, i + 8, i + n, "meta", &at, &n)) &&
+        !lb_box(fd, at + 8, end, "meta", &at, &n))
+        return 0; /* udta/meta (iTunes), else meta in moov */
+    end = at + n;
+    pos = at + 8;
+    if (lb_rd(fd, pos, h, 8) != 8) return 0;
+    if (!lb_eq(h + 4, "hdlr", 4)) pos += 4; /* the full box's version and flags (QuickTime's meta has none) */
+    if (!lb_box(fd, pos, end, "ilst", &at, &n)) return 0;
+    end = at + n;
+    for (pos = at + 8, i = 0; i < 1024 && pos < end && end - pos >= 8; ++i) {
+        unsigned in, p, rank = 0, dat = 0, dn = 0;
+        if (lb_rd(fd, pos, h, 8) != 8) break;
+        in = be32(h);
+        if (in < 8 || in > end - pos) break;
+        if (lb_eq(h + 4, "----", 4) && in <= LB_READ && lb_rd(fd, pos, buf, in) == in) {
+            for (p = 8; in - p >= 8;) {
+                unsigned cn = be32(buf + p);
+                if (cn < 8 || cn > in - p) break;
+                if (lb_eq(buf + p + 4, "name", 4) && cn >= 12)
+                    rank = lb_keyis(buf + p + 12, cn - 12, "LABEL")          ? 3
+                           : lb_keyis(buf + p + 12, cn - 12, "ORGANIZATION") ? 2
+                           : lb_keyis(buf + p + 12, cn - 12, "PUBLISHER")    ? 1
+                                                                             : 0;
+                else if (lb_eq(buf + p + 4, "data", 4) && cn >= 16 && !dat)
+                    dat = p, dn = cn;
+                p += cn;
+            }
+            if (rank > best && dat) {
+                unsigned ty = be32(buf + dat + 8) & 0xffffff;
+                unsigned char t[LB_MAX * 2];
+                int got = 0;
+                if (ty == 1 || ty == 0)
+                    got = lb_put(out, size, buf + dat + 16, dn - 16);
+                else if (ty == 2) {
+                    lb_id3str(2, buf + dat + 16, dn - 16, t, sizeof t);
+                    got = lb_put(out, size, t, sizeof t);
+                }
+                if (got) best = rank, len = got;
+            }
+        }
+        pos += in;
     }
     return len;
 }
@@ -257,7 +335,8 @@ int lb_probe(const char *path, char *out, unsigned size) {
         else if (lb_eq(h, "ID3", 3)) {
             len = lb_id3(fd, h, buf, out, size, &end);
             if (!len && lb_rd(fd, end, h, 4) == 4 && lb_eq(h, "fLaC", 4)) len = lb_flac(fd, end + 4, buf, out, size);
-        }
+        } else if (lb_eq(h + 4, "ftyp", 4))
+            len = lb_mp4(fd, buf, out, size);
     }
     close(fd);
     free(buf);
@@ -291,7 +370,8 @@ static unsigned lb_intern(const char *s) {
     for (i = 0; i < lb.nlab; ++i)
         if (!strcmp(lb.names[i], s)) return i + 1;
     for (i = 0; i < lb.nlab; ++i)
-        if (!cc_nocase(lb.names[i], s)) return i + 1; /* "Warp Records" and "WARP RECORDS" are one label: the first spelling kept */
+        if (!cc_nocase(lb.names[i], s))
+            return i + 1; /* "Warp Records" and "WARP RECORDS" are one label: the first spelling kept */
     if (lb.nlab >= LB_MAX_LABELS) return 0;
     if (lb.nlab == lb.cap) {
         unsigned cap = lb.cap ? lb.cap * 2 : 64;
@@ -328,8 +408,8 @@ static void lb_read(void) {
     }
     close(fd);
     h = (unsigned *)buf, n = h[1], nl = h[2], pb = h[3];
-    if (got != size || h[0] != LB_MAGIC || n > LB_MAX_ENTRIES || nl > LB_MAX_LABELS || (unsigned)size != LB_HDR + n * 12 + pb ||
-        h[4] != lb_sum(buf + LB_HDR, (unsigned)size - LB_HDR, FNV_SEED)) {
+    if (got != size || h[0] != LB_MAGIC || n > LB_MAX_ENTRIES || nl > LB_MAX_LABELS ||
+        (unsigned)size != LB_HDR + n * 12 + pb || h[4] != lb_sum(buf + LB_HDR, (unsigned)size - LB_HDR, FNV_SEED)) {
         free(buf);
         return;
     }

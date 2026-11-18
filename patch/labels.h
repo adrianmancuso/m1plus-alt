@@ -1,7 +1,8 @@
 /* Record labels: each file's label tag, read from the file and kept on the card by path hash (docs/modules/labels.md).
  *
  * The stock database has no label column, so the label is read from the file itself on the shared worker: FLAC and Ogg (Vorbis, Opus)
- * Vorbis comments LABEL, ORGANIZATION, PUBLISHER; MP3 ID3v2.2-2.4 TXXX:LABEL, TPUB (TPB). The reader uses only open, read, lseek and close,
+ * Vorbis comments LABEL, ORGANIZATION, PUBLISHER; MP3 ID3v2.2-2.4 TXXX:LABEL, TPUB (TPB); MP4 (M4A)
+ * ----:com.apple.iTunes:LABEL, ORGANIZATION, PUBLISHER. The reader uses only open, read, lseek and close,
  * reads at most LB_READ bytes of one block or frame and skips the rest (pictures) by seeking. The table follows the durations table
  * (patch/durations.h): entries {key, size, label} sorted by key, a changed size read again, a pass that drops the files nobody named.
  */

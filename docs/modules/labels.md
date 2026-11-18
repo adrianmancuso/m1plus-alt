@@ -16,11 +16,12 @@ shared worker during the Home pass ([homecover](homecover.md#record-labels)) and
 | FLAC | Vorbis comment `LABEL`, `ORGANIZATION`, `PUBLISHER` (block type 4, at most 256 blocks walked) |
 | Ogg Vorbis, Opus | the same, from the comment packet reassembled over at most 64 pages |
 | MP3 (ID3v2.2–2.4) | `TXXX:LABEL` (`TXX`), then `TPUB` (`TPB`); FLAC after an ID3 tag is read when the tag has none |
+| MP4 (M4A) | iTunes freeform `----:…:LABEL`, `ORGANIZATION`, `PUBLISHER` in `moov/udta/meta/ilst` (or `moov/meta`); boxes are walked by seeking, so `moov` after `mdat` and cover art cost nothing |
 
 Tag names compare case-insensitively. ID3 text in encodings 0–3 becomes UTF-8. Compressed,
 encrypted or unsynchronised frames are skipped, and a frame the file cuts short is not taken. The
 value is trimmed, control characters become spaces, and it is cut to `LB_MAX - 1` (127) bytes at a
-character boundary. MP4/M4A, DSF and WAV are not read (no label).
+character boundary. DSF and WAV are not read (no label). An MP4 box past 4 GB stops the walk.
 
 ## Table
 
