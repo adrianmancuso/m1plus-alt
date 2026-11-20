@@ -872,11 +872,11 @@ def scheme_picker_tests(ctx):
     from PIL import Image
     imgs = {i: Image.open(os.path.join(raw, f'images/xx/pod_sw_s{i}.png')).convert('RGBA') for i in range(9)}
     opaque = lambda im: {p[:3] for p in im.getdata() if p[3] == 255}
-    ink = lambda i: L.scheme_ends(L.SCHEMES[i])[1]
+    ink = lambda i: L.scheme_ends(L.SCHEMES[i])[1]; paper = (0xF4, 0xF1, 0xEA)
     expect(all(im.size == (24, 24) for im in imgs.values()) and not opaque(imgs[0]) and imgs[0].getpixel((12, 12))[3] == 0
-           and all(opaque(imgs[i]) == {tuple(ink(i)), tuple(L.scheme_accent(L.SCHEMES[i]))} and imgs[i].getpixel((5, 12))[:3] == tuple(ink(i)) and imgs[i].getpixel((18, 12))[:3] == tuple(L.scheme_accent(L.SCHEMES[i])) for i in range(1, 8))
-           and opaque(imgs[8]) == {(0x8C,) * 3} and all(im.getpixel((0, 0))[3] == 0 for im in imgs.values()),
-           'the swatches: a 20 px round disc on a 24 px canvas, the scheme\'s day ink on the left and its accent on the right (Greyscale one grey, Classic transparent)')
+           and all({paper, tuple(ink(i)), tuple(L.scheme_accent(L.SCHEMES[i]))} <= opaque(imgs[i]) and imgs[i].getpixel((4, 12))[:3] == paper and imgs[i].getpixel((8, 12))[:3] == tuple(ink(i)) and imgs[i].getpixel((16, 12))[:3] == tuple(L.scheme_accent(L.SCHEMES[i])) for i in range(1, 8))
+           and {(0x8C,) * 3, paper} <= opaque(imgs[8]) and all(im.getpixel((0, 0))[3] == 0 for im in imgs.values()),
+           'the swatches: a 20 px round cream paper disc on a 24 px canvas with the scheme\'s day ink inset on the left and its accent on the right (Greyscale one grey, Classic transparent)')
     expect(all(L.image_flips(f'pod_sw_s{i}.png', imgs[i]) is None for i in range(9)) and all(L.accent_kind(f'pod_sw_s{i}') is None for i in range(9)), 'a swatch is never flipped by Light nor tinted by an accent')
     st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_appearance.bin'), 'rb').read())
     expect(st.find('pod_row0').find('pod_icon').get('image') == 'pod_ci_sun_moon' and st.find('pod_value0').get('tr_text') == 'Classic' and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_contrast',

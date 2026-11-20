@@ -621,19 +621,22 @@ def swatch(i):
 
 
 def scheme_swatch(i):
-    """The Scheme picker's swatch i: the same disc as swatch(), split down the middle (left the scheme's day ink, right its accent); Greyscale one grey; Classic nothing."""
+    """The Scheme picker's swatch i: a cream paper (#F4F1EA) disc of SWATCH_PX with an inset disc split down the middle (left the scheme's day ink, right its accent), so it shows on the dark card
+    and on cream; Greyscale one grey inset; Classic nothing."""
     from PIL import Image, ImageDraw
     import palette
-    ss = 8; big = Image.new('L', (POD_ICON * ss,) * 2, 0)
-    o = (POD_ICON - SWATCH_PX) * ss // 2
-    if i:
-        ImageDraw.Draw(big).ellipse((o, o, o + SWATCH_PX * ss - 1, o + SWATCH_PX * ss - 1), fill=255)
-    mask = big.resize((POD_ICON,) * 2, Image.LANCZOS)
+    ss = 8; PAPER = (0xF4, 0xF1, 0xEA); INSET = 4
+    im = Image.new('RGBA', (POD_ICON,) * 2, (0, 0, 0, 0))
+    if not i: return im
+    def disc(inset):
+        big = Image.new('L', (POD_ICON * ss,) * 2, 0); o = ((POD_ICON - SWATCH_PX) // 2 + inset) * ss
+        ImageDraw.Draw(big).ellipse((o, o, o + (SWATCH_PX - 2 * inset) * ss - 1, o + (SWATCH_PX - 2 * inset) * ss - 1), fill=255)
+        return big.resize((POD_ICON,) * 2, Image.BOX)
     name = palette.SCHEMES[i]
-    left, right = (SCHEME_GREY,) * 2 if palette.SCHEMES[i] == 'greyscale' else (palette.scheme_ends(name)[1], palette.scheme_accent(name)) if i else ((0,) * 3,) * 2
-    im = Image.new('RGBA', (POD_ICON,) * 2, tuple(left) + (0,))
-    im.paste(Image.new('RGBA', (POD_ICON // 2, POD_ICON), tuple(right) + (0,)), (POD_ICON // 2, 0))
-    im.putalpha(mask); return im
+    left, right = (SCHEME_GREY,) * 2 if name == 'greyscale' else (palette.scheme_ends(name)[1], palette.scheme_accent(name))
+    paper = Image.new('RGBA', (POD_ICON,) * 2, PAPER + (0,)); paper.putalpha(disc(0)); im.alpha_composite(paper)
+    ink = Image.new('RGBA', (POD_ICON,) * 2, tuple(left) + (0,)); ink.paste(Image.new('RGBA', (POD_ICON // 2, POD_ICON), tuple(right) + (0,)), (POD_ICON // 2, 0))
+    ink.putalpha(disc(INSET)); im.alpha_composite(ink); return im
 
 
 DROP_GRABBER = ('drop_grabber', 36, 5)   # name, w, h (= GRABBER's pill)

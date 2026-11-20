@@ -33,8 +33,8 @@ Classic is saved (`open_page` refresh in `patch/m1plus.c`).
   Neutral `#EEEEEC`). A tap calls `pal_accent_set`: saved atomically, applied at once. A failed save
   changes nothing. The swatches are never flipped or tinted.
 - The Scheme picker `m1plus_scheme` has one check row per scheme with a round swatch (`pod_sw_s<i>`:
-  the day ink left, the accent right; Greyscale one grey; Classic a transparent one so the labels
-  line up). A tap calls `pal_scheme_set`, as the Accent picker does.
+  a cream paper disc with an inset disc, the day ink left and the accent right; Greyscale one grey
+  inset; Classic a transparent one so the labels line up). A tap calls `pal_scheme_set`, as the Accent picker does.
 - The Background picker `m1plus_background` offers Black and Tinted. Light is reachable only by
   editing the file.
 - Both files are written through `home_write_atomic`.
@@ -58,7 +58,8 @@ Red `#FF453A`, Orange `#FF9F0A`, Green `#30D158`, Teal `#40C8E0`, Purple `#BF5AF
 
 Cover-tinted pages (Now Playing, album page, Podcasts Show page, Daily Mix, Radio Now Playing, idle
 lyrics) keep their cover background exactly; their controls (progress fill, wave) may take the
-accent. This holds in Light too.
+accent. This holds in Light too, and under a riso scheme by day Now Playing and the cover pages use
+the neutral tone instead of the cover's.
 
 Contrast of the accent on black: Red 6.16, Purple 5.96, Champagne 9.34, Orange, Green and Teal
 about 10. On the pressed card tint the lowest is Purple 3.61.
@@ -227,14 +228,15 @@ decides both, whatever their files hold. Classic goes through the paths above, b
 
 ## Greyscale covers
 
-The Greyscale scheme (`appearance-scheme` 8) is Black + Neutral with only the image hook on: a cover
-(a decoded name with `/` or `:`) comes back with every pixel its Rec. 601 luma, alpha kept
-(`grey_rule`, model `grey_pixel`). Premultiplied pixels grey as stored, since luma is linear. Theme
-images, the style hook and lock screen wallpapers (`/mnt/mmc/lockscreenimage/`) stay as they are.
+The Greyscale scheme (`appearance-scheme` 8) is Black + Neutral with only the image hook on: every
+decoded image named by a path or URL (`/` or `:`: covers, artist photos, podcast and radio covers) comes back
+with every pixel its Rec. 601 luma, alpha kept (`grey_rule`, model `grey_pixel`). Premultiplied
+pixels grey as stored, since luma is linear. Theme images, the style hook and lock screen wallpapers
+(`/mnt/mmc/lockscreenimage/`, excluded) stay as they are.
 
 - `pal_tone` gives a tone's grey, so Now Playing, album page and Show page tints follow the cover.
 - The tone cache stores nothing under Greyscale, and the Daily Mix decodes no cover for its tones
-  (cache hits, else its fixed palette), so no grey tone outlives the scheme.
+  (cache hits, else its fixed palette), so no new grey tone is stored; an album or Show page tone stays grey until the page reopens.
 - When Greyscale turns on or off, `pal_regrey` makes `np_relight` look again at Now Playing's tone and
   a server track's cover.
 - Stays in colour: the Daily Mix art and card, painted from tones the payload chose, not decoded.
