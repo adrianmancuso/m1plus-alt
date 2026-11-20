@@ -25,7 +25,7 @@ settings-file table and the stock pages we open; a page with its own doc is a po
 | (card) | General | About, Software Update; Date & Time, Keyboards, Language | [General](#general) |
 | | Display | our page | [display](display.md) |
 | | Buttons & Power | our page | [keyspower](keyspower.md) |
-| | Appearance | Background, Accent, Control Center | [accent](accent.md), [pulldown](pulldown.md) |
+| | Appearance | Scheme, Background, Accent, Control Center | [accent](accent.md), [pulldown](pulldown.md) |
 | | Battery | Battery Percentage, Charge Limit, Battery History | [battery](battery.md), [charging](charging.md) |
 | General | Software Update | our page `m1plus_update` (link row, glyph `download`) | [update](update.md) |
 | | Date & Time | Set Automatically, Time Zone (43 zones), Date and Time, 24-Hour Time | [datetime](datetime.md) |
@@ -155,6 +155,7 @@ page is a `Page(layout=[Row, Hdr, Note, GAP ...])` in `tools/pod_pages.py` of ki
 | `albums-view` | Albums view | `0` list; missing/other grid |
 | `appearance-accent` | Accent | one digit, the index 0 Neutral (default) .. 6 Champagne; missing/other Neutral ([accent](accent.md)) |
 | `appearance-background` | Background | `0` Black (default), `1` Tinted; missing/other Black ([accent](accent.md)) |
+| `appearance-scheme` | Scheme | one digit, the index 0 Classic (default) .. 8 Greyscale; missing/other Classic ([accent](accent.md)) |
 | `appearance-headers` | Section Headers | `0` off; missing/other on (the default); the section letters and pinned header of the A-Z lists, the rows close up when off |
 | `appearance-index-rail` | Index Rail | `0` off; missing/other on (the default) ([artists](artists.md)) |
 | `artists-rebuild` | Rebuild Artist Photos request | exists while requested; written as `1\n`; removed by Home's pass ([homecover](homecover.md#rebuild-covers), [artists](artists.md)) |

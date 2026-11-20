@@ -16,7 +16,7 @@ The M1+ Music Home menu and Extras: which rows exist, their order, and what the 
 
 Both use stock `list_view > scroll_view` with `scroll_bar_m`, 52 px `list_item` rows and the
 stock row theme. The asset contains one row per `ITEMS` entry, then Extras. Never hard-code the
-row count: Pod, Podcasts, Search, Radio and Audiobooks are items too. Item ids are frozen (`ITEM_IDS`, asserted at build): `home-menu` stores them, so a new item is appended, never inserted, removed or reordered.
+row count: Pod, Podcasts, Search, Radio, Audiobooks and Labels are items too. Item ids are frozen (`ITEM_IDS`, asserted at build): `home-menu` stores them, so a new item is appended, never inserted, removed or reordered.
 
 Default shown IDs are `12345`: Cover Flow, Albums, Artists, Songs and Playlists. Extras is
 always visible and last. Later items are hidden by default and live in Extras:
@@ -30,6 +30,7 @@ always visible and last. Later items are hidden by default and live in Extras:
 | 22 | `n` | Radio ([radio](radio.md); Library group after Podcasts) |
 | 23 | `o` | Subsonic (Streaming group; [subsonic](subsonic.md)) |
 | 24 | `p` | Audiobooks ([audiobooks](audiobooks.md); Library group after Podcasts) |
+| 25 | `q` | Labels ([labels](labels.md#labels-page); Library group after Composers) |
 
 Their actions and pages are defined once in `pod_pages.py`.
 

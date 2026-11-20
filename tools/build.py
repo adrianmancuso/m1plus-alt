@@ -22,9 +22,9 @@ from pathlib import Path
 
 ZIP = paths.ZIP     # this checkout's firmware/, else the main checkout's (tools/paths.py)
 ZIP_SHA = 'db7bdbc42ffe6d5c1e3fdca9363edb78a01898b9a725c34793394cf6abfa33c0'
-VERSION = '1.6.0'  # major.minor.patch: the release, its git tag and GitHub release, About
+VERSION = '0.5.0'  # major.minor.patch (this fork's own line, from upstream imfing/m1plus-music 1.6.0): the release, its git tag and GitHub release, About
 TAG = 'V2.1-' + VERSION  # what the updater compares (firmware_v20.info line 2: must contain V and differ from V2.1)
-REPO = 'imfing/m1plus-music'  # the GitHub repository whose releases Software Update fetches (patch/pcnet.c; docs/modules/update.md); the payload gets it as M1PLUS_REPO (tools/pod.py)
+REPO = 'adrianmancuso/m1plus-alt'  # the GitHub repository whose releases Software Update fetches (patch/pcnet.c; docs/modules/update.md); the payload gets it as M1PLUS_REPO (tools/pod.py)
 RESTORE_TAG = 'V2.1R'
 
 

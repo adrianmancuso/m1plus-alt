@@ -242,7 +242,10 @@ static void np_set_color(unsigned tone) {
 }
 
 void np_relight(void) {
-    if (np.win && np_tone_raw) np_set_color(np_tone_raw); /* (patch/palette.c pal_apply) */
+    if (!np.win) return;
+    if (pal_regrey()) /* Greyscale on or off: the tone and a server track's cover were made from the cover as it was decoded then; the next tick looks again */
+        np.key = 0, np.sig = 0, np.sbkey = 0;
+    if (np_tone_raw) np_set_color(np_tone_raw); /* (patch/palette.c pal_apply) */
 }
 
 unsigned np_hash(const char *s);

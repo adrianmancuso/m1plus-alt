@@ -6,7 +6,7 @@
 `test/pod/artistphoto.py`, `test/pod/i18n.py`. **Preview:** `tools/preview/preview_artists_photo.py
 WORKDIR OUT.png`.
 
-Our Artists page, with Genres and Composers on the same code. No hook; if the window will not open
+Our Artists page, with Genres, Composers and record Labels ([labels](labels.md#labels-page)) on the same code. No hook; if the window will not open
 the Home dispatcher opens the tile's stock `localclass_page`.
 
 ## Genres and Composers are the same page
@@ -98,6 +98,8 @@ sort is a small fraction of stock's own, which always runs first.
   search if that returns -1), the **Show** group `Artists` / `Album Artists` (glyphs
   `pod_ic_vsartist`, `pod_ic_vsalbumartist`; the tick follows `artist_type`) and the **Name** sort
   with its grey line A-Z / Z-A: four rows, `vs_glass4`.
+- **Labels**: `Search Labels` (`vs_label6` retitled at open; `search_open_in(SEARCH_LABELS)`) and
+  **Name**.
 - **Genres and Composers**: Name alone, `vs_glass1`, no hairline.
 - A tap on the ticked Name row reverses the order, saved first (`home_write_atomic`; a failed save
   changes nothing), then the list is built again from the top.

@@ -45,6 +45,7 @@
 #include "entries.h"
 #include "artsplit.h"
 #include "lyrics.h"
+#include "picker.h"
 
 #define PM_ROWS \
     17 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep, pod_art, pod_sleep, pod_mode, pod_lyr, pod_vu */
@@ -587,9 +588,15 @@ static int pm_on_delete(void *ctx, void *e) {
 }
 
 /* Add to playlist (listitem2) is stock's (0x4798f0); for a Subsonic stream it does not run (the row is dimmed and insensitive; this is the second look). */
+/* Add to playlist: a stream is refused; a file opens our picker on the playing track and the sheet closes, as the other rows' pages do. Where the picker does not open, stock's
+ * handler runs (it closes the sheet and opens its own picker). */
 static int pm_on_addpl(void *ctx, void *e) {
     (void)e;
-    return pm.dlg && ctx == pm.dlg && pm_stream_now() ? RET_STOP : RET_OK;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    if (pm_stream_now()) return RET_STOP;
+    if (picker_open_one(CLASS_ALL_SONGS, cc_playing()) < 0) return RET_OK;
+    window_close(ctx);
+    return RET_STOP;
 }
 
 static void pm_start(void *dlg) {

@@ -1975,7 +1975,7 @@ def cards_row(i, row, piece, last, icon=True):
     import pod_settings as ST
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
-    swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
+    swatch = row.action in (pod_pages.ACT_ACCENTSET, pod_pages.ACT_SCHEMESET)   # the Accent and Scheme pickers' rows show a round swatch where a glyph goes (never tinted: docs/modules/accent.md)
     has_icon = swatch or (icon and kind not in ('check', 'info', 'preset', 'preamp', 'band', 'lib', 'delete', 'plain', 'wvalue') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_REGION, pod_pages.ACT_PCDIR, pod_pages.ACT_RGBROW, pod_pages.ACT_LEDFOLLOW, *pod_pages.ASSEP_ACTIONS, pod_pages.ACT_PEQ_PRESETS, pod_pages.ACT_PEQ_TENBAND))   # (the Cache counts, Unsupported Files, the Podcast Region row, LED Light's Theme and Follow Screen rows and the Presets count have no glyph, like the rows around them)
     h = ST.row_h(row)
     item = Widget('list_item', 0, 0, ST.LIST_W, h, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind in ('info', 'preamp') and row.action != pod_pages.ACT_SFDEL else []))
@@ -1991,7 +1991,7 @@ def cards_row(i, row, piece, last, icon=True):
     if curve: w = ST.curve_box()[0] - ST.VALUE_LABEL_GAP - x
     if has_icon:
         item.children.append(Widget('image', ST.ICON_X, ST.ICON_Y, ST.ICON_PX, ST.ICON_PX, [
-            ('name', 'pod_swatch' if swatch else 'pod_icon'), ('image', f'pod_sw{row.arg}' if swatch else card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
+            ('name', 'pod_swatch' if swatch else 'pod_icon'), ('image', (f'pod_sw_s{row.arg}' if row.action == pod_pages.ACT_SCHEMESET else f'pod_sw{row.arg}') if swatch else card_name(CARD_GLYPHS[row.label])), ('draw_type', 'icon'), ('sensitive', 'false')]))
     two_lines = kind in ('band', 'lib')   # the preset page's band row: the frequency and the gain on the first line, the type and Q (grey) under it; the Presets page's row: the name and a grey line
     ty, th, sy, sh = (ST.LIB_TITLE_Y, ST.LIB_TITLE_H, ST.LIB_SUB_Y, ST.LIB_SUB_H) if kind == 'lib' else (ST.BAND_TITLE_Y, ST.BAND_TITLE_H, ST.BAND_SUB_Y, ST.BAND_SUB_H)
     item.children.append(Widget('hscroll_label', x, ty if two_lines else 0, w, th if two_lines else h, [

@@ -3,8 +3,9 @@
 **Sources:** `patch/palette.c`, `patch/palette.h`, `tools/palette.py` (the model),
 `tools/palette_audit.py`, `tools/pod.py` (`STYLE_COLOR`, `IMAGE_ADD`, `STYLE_GRADIENT`,
 `LIGHT_PINS`), `patch/offsets.inc` (`ROLE_*`, `ACC_*`, `LIGHT_*`). **Tests:** `test/pod/palette.py`.
-**Preview:** `tools/preview/preview_accent.py WORKDIR` (`out/preview/accent-*.png`; `make preview`
-runs it), `tools/preview/preview_settings.py`.
+**Preview:** `tools/preview/preview_accent.py WORKDIR` (`out/preview/accent-*.png`),
+`tools/preview/preview_schemes.py WORKDIR` (`out/preview/schemes/`); `make preview` runs both.
+`tools/preview/preview_settings.py`.
 
 The user picks a system accent colour and a page background (Black or Tinted). Both go through **one
 palette layer**: every colour the painter gets passes `pal_map(colour)`, which knows the
@@ -17,17 +18,23 @@ the modded default theme ([theme](theme.md)).
 
 ## Settings
 
-Settings > Appearance (a link row, glyph `palette`) opens `m1plus_appearance`: a **Background** row
-(`ACT_BG` 46) above an **Accent** row (`ACT_ACCENT` 48).
+Settings > Appearance (a link row, glyph `palette`) opens `m1plus_appearance`: a **Scheme** row
+(`ACT_SCHEME` 191) in a card of its own, then a **Background** row (`ACT_BG` 46) above an **Accent**
+row (`ACT_ACCENT` 48). Background and Accent are invisible and insensitive while a scheme other than
+Classic is saved (`open_page` refresh in `patch/m1plus.c`).
 
 | File (`/mnt/data/m1plus/`) | Values |
 |---|---|
 | `appearance-accent` | one digit 0..6 (Neutral, Red, Orange, Green, Teal, Purple, Champagne); anything else or missing is Neutral |
+| `appearance-scheme` | one digit 0..8 (Classic, Navy & Coral, Teal & Sunflower, Federal Blue & Fluoro Orange, Green & Bright Red, Purple & Yellow, Burgundy & Mint, Black & Fluoro Pink, Greyscale); anything else or missing is Classic |
 | `appearance-background` | `0` Black, `1` Tinted, `2` Light, `3` Light Auto; others Black |
 
 - The Accent picker `m1plus_accent` has one check row per accent with a round swatch (`pod_sw<i>`;
   Neutral `#EEEEEC`). A tap calls `pal_accent_set`: saved atomically, applied at once. A failed save
   changes nothing. The swatches are never flipped or tinted.
+- The Scheme picker `m1plus_scheme` has one check row per scheme with a round swatch (`pod_sw_s<i>`:
+  a cream paper disc with an inset disc, the day ink left and the accent right; Greyscale one grey
+  inset; Classic a transparent one so the labels line up). A tap calls `pal_scheme_set`, as the Accent picker does.
 - The Background picker `m1plus_background` offers Black and Tinted. Light is reachable only by
   editing the file.
 - Both files are written through `home_write_atomic`.
@@ -43,7 +50,7 @@ Red `#FF453A`, Orange `#FF9F0A`, Green `#30D158`, Teal `#40C8E0`, Purple `#BF5AF
 | pressed row / card | soft tint `mix(surface, accent, 22 %)`; the text stays white |
 | row glyphs (M1+ Music, Folders, Settings cards, the track sheet) | the accent at rest |
 | switch on | track is the accent, knob white |
-| Podcasts Library tiles | glyph is the accent; the `#1C1C1E` square stays |
+| Podcasts Library tiles | glyph is the accent; the `#1C1C1E` square stays (a riso scheme: remapped) |
 | pull-down ON tiles | disc is the accent, glyph stays `#141414` (white on Orange or Teal would be about 2:1) |
 | pressed Play / Shuffle | see below |
 | slider fill, progress fills, picker check, playing wave marker | the accent |
@@ -51,7 +58,8 @@ Red `#FF453A`, Orange `#FF9F0A`, Green `#30D158`, Teal `#40C8E0`, Purple `#BF5AF
 
 Cover-tinted pages (Now Playing, album page, Podcasts Show page, Daily Mix, Radio Now Playing, idle
 lyrics) keep their cover background exactly; their controls (progress fill, wave) may take the
-accent. This holds in Light too.
+accent. This holds in Light too, and under a riso scheme by day Now Playing and the cover pages use
+the neutral tone instead of the cover's.
 
 Contrast of the accent on black: Red 6.16, Purple 5.96, Champagne 9.34, Orange, Green and Teal
 about 10. On the pressed card tint the lowest is Purple 3.61.
@@ -108,7 +116,7 @@ change. `tools/palette_audit.py WORKDIR` lists the tinted names.
 | PRESS | `pod_cd_*_down` (pressed settings card) | `mix(#1C1C1E, accent, 22 %)` |
 | DISC | the pull-down's ON tiles | `#141414` stays, white becomes the accent, by lightness; off (`#2C2C2E`) and disabled (`#1E1E1E`) tiles are untouched |
 | GLYPH | row glyphs (below) | every colour becomes the accent, alpha kept |
-| TILE | the four Podcasts Library tiles | the disc rule with `#1C1C1E` as the fixed end: white becomes the accent, the square stays exactly |
+| TILE | the four Podcasts Library tiles | the disc rule with `#1C1C1E` as the fixed end: white becomes the accent, the square stays exactly (a riso scheme: the remapped square) |
 | SHUFDOWN | the Shuffle disc's pressed image | the disc becomes `mix(rest, accent, 22 %)`, the glyph stays |
 
 Premultiplied pixels are handled. Images are global, so cover-tinted pages get the tinted images
@@ -186,6 +194,57 @@ lyrics, the Wi-Fi bars and spinner, the stock pages' 40 px icons, the EQ cards' 
   a grey would leave that grey untinted on other pages.
 - Limits: the global `nb_fade` is a tinted black over the cover tone on a cover page; slider and
   progress tracks (`#333`) stay neutral.
+
+## Schemes
+
+A scheme (Settings > Appearance > Scheme) replaces Background and Accent with one choice: Classic
+(the Background and Accent above), seven riso schemes (paper, ink and one accent each) or
+Greyscale. It is saved in `appearance-scheme` (`SCHEME_FILE`, one digit, 0 Classic, 1..7 the riso
+schemes, 8 Greyscale; anything else or missing is Classic), written atomically by `pal_scheme_set`.
+While a scheme other than Classic is saved, Background and Accent are hidden and ignored: the scheme
+decides both, whatever their files hold. Classic goes through the paths above, bit-identical.
+
+- **Riso schemes:** the remap does not invert. A neutral colour maps per channel between two ends:
+  black to the paper, white to the ink, linearly between (C truncation, `pal_remap`; model
+  `remap`, `scheme_ends`). The accent comes from the scheme (`SCHn_ACC`) and takes the Accent
+  roles: pressed tint, progress and slider fill, switch track, row glyph, pull-down tile. Row glyphs
+  use the scheme's own glyph colour (`SCHn_GDAY`, `SCHn_GNIGHT`).
+- **Day and night:** the clock rule of Light Auto (07:00 to 18:59). By day the paper is cream
+  `SCHEME_PAPER` `#F4F1EA` and white maps to the scheme's ink (`SCHn_INK`). By night the paper is the
+  scheme's dark (`SCHn_NIGHT`) and white maps to the cream. The secondary grey `#AAAAAA` maps as
+  `#D4D4D4` by day (colours only, not images) so it keeps 4.5:1 on cream. The timer re-evaluates
+  the clock while a scheme is on.
+- **Cover pages** keep the cover's own colours; their tone goes through `pal_tone`, which by day
+  under a riso scheme returns the neutral tone. The Cover Flow shelf frame is the scheme's paper
+  (`pal_map(black)`).
+- **Greyscale** is Black + Neutral with the style hook as a pass-through and only the image hook on:
+  covers turn grey (below). Theme images, every style colour and lock screen wallpapers stay in
+  colour or as they are.
+
+**Sources:** `patch/palette.c` (`pal_scheme`, `pal_scheme_set`, `pal_refresh`, `pal_remap`),
+`patch/offsets.inc` (`SCHEME_*`, `SCHn_*`), `tools/palette.py` (`SCHEMES`, `map_colour`,
+`render_image`, `scheme_ends`), `tools/pod_pages.py` (`m1plus_scheme`). **Tests:**
+`test/pod/palette.py` (`scheme_*_tests`, `grey_tests`).
+
+## Greyscale covers
+
+The Greyscale scheme (`appearance-scheme` 8) is Black + Neutral with only the image hook on: every
+decoded image named by a path or URL (`/` or `:`: covers, artist photos, podcast and radio covers) comes back
+with every pixel its Rec. 601 luma, alpha kept (`grey_rule`, model `grey_pixel`). Premultiplied
+pixels grey as stored, since luma is linear. Theme images, the style hook and lock screen wallpapers
+(`/mnt/mmc/lockscreenimage/`, excluded) stay as they are.
+
+- `pal_tone` gives a tone's grey, so Now Playing, album page and Show page tints follow the cover.
+- The tone cache stores nothing under Greyscale, and the Daily Mix decodes no cover for its tones
+  (cache hits, else its fixed palette), so no new grey tone is stored; an album or Show page tone stays grey until the page reopens.
+- When Greyscale turns on or off, `pal_regrey` makes `np_relight` look again at Now Playing's tone and
+  a server track's cover.
+- Stays in colour: the Daily Mix art and card, painted from tones the payload chose, not decoded.
+- Kept as decoded until rebuilt (the page reopens, the next track or a scroll), in both directions:
+  Cover Flow textures, the grid tiles (Albums, the menu's Recently Played shelf, the album page
+  header), the minibar and Now Playing info art, Big Cover, the Home cover, and an album page or
+  Show page tone worked out from a grey cover. These are RAM copies made by `cc_decode`, which no
+  relight function owns.
 
 ## Light background (hidden)
 

@@ -38,6 +38,7 @@
 #include "albums.h"
 #include "coverflow.h"
 #include "entries.h"
+#include "labels.h"
 
 #define SE_TERMS 8 /* terms taken from the query (the rest are ignored) */
 #define SE_QMAX 64 /* the keyboard's 63 bytes and the NUL */
@@ -50,15 +51,16 @@
 #define SE_MASK \
     0x80000000u /* a key entry with this bit is a set of initials (bit 0 'a' .. bit 25 'z'), not a code point */
 
-enum { SE_ARTIST, SE_ALBUM, SE_SONG, SE_PLAYLIST, SE_KINDS };
-enum { CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS };
+enum { SE_ARTIST, SE_ALBUM, SE_SONG, SE_PLAYLIST, SE_LABEL, SE_KINDS };
+enum { CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS, CH_LABELS };
 
-static const unsigned char se_chip_kind[SE_CHIPS] = {0xff, SE_ARTIST, SE_ALBUM, SE_SONG,
-                                                     SE_PLAYLIST}; /* the type a chip shows (Top Results: all) */
-static const char *const se_chip_key[SE_CHIPS] = {"Top Results", "Artists", "Albums", "Songs", "Playlists"};
-static const unsigned se_cap[SE_KINDS] = {SE_CAP_ARTISTS, SE_CAP_ALBUMS, SE_CAP_SONGS, SE_CAP_PLAYLISTS};
+static const unsigned char se_chip_kind[SE_CHIPS] = {
+    0xff, SE_ARTIST, SE_ALBUM, SE_SONG, SE_PLAYLIST, SE_LABEL}; /* the type a chip shows (Top Results: all) */
+static const char *const se_chip_key[SE_CHIPS] = {"Top Results", "Artists", "Albums", "Songs", "Playlists", "Labels"};
+static const unsigned se_cap[SE_KINDS] = {SE_CAP_ARTISTS, SE_CAP_ALBUMS, SE_CAP_SONGS, SE_CAP_PLAYLISTS, SE_CAP_LABELS};
 static const unsigned char se_top_order[SE_KINDS] = {
-    SE_ARTIST, SE_ALBUM, SE_PLAYLIST, SE_SONG}; /* within a quality, Top Results lists the types in this order */
+    SE_ARTIST, SE_ALBUM, SE_LABEL, SE_PLAYLIST,
+    SE_SONG}; /* within a quality, Top Results lists the types in this order */
 
 typedef struct {
     unsigned char kind;
@@ -448,7 +450,8 @@ static int se_test(const unsigned *key, unsigned n, unsigned pn) {
  * back to its file name. */
 static unsigned se_key(void *rec, int kind, unsigned *key, unsigned *pn, int py) {
     unsigned n;
-    if (kind == SE_ARTIST || kind == SE_PLAYLIST) return *pn = se_cat(cc_str(rec, REC_TITLE), key, 0, SE_KEY, py);
+    if (kind == SE_ARTIST || kind == SE_PLAYLIST || kind == SE_LABEL)
+        return *pn = se_cat(cc_str(rec, REC_TITLE), key, 0, SE_KEY, py);
     if (kind == SE_ALBUM) {
         const char *al = cc_str(rec, REC_ALBUM);
         n = *pn = se_cat(*al ? al : cc_str(rec, REC_TITLE), key, 0, SE_KEY, py);
@@ -598,6 +601,9 @@ static void se_load(void) {
     se.lists[SE_ALBUM] = cc_albums();
     if (loadLocalClassList(CLASS_PLAYLISTS) > 0 && (list = *(void **)PDEQ_PLAYLIST) != (void *)0 && deque_size(list))
         se.lists[SE_PLAYLIST] = cc_copy_list(list);
+    lb_acquire(); /* the record labels' table (patch/labels.h): the rows copy the names */
+    se.lists[SE_LABEL] = lb_rows(LB_MAX_LABELS);
+    lb_release();
     if (loadLocalClassList(CLASS_ALL_SONGS) > 0 && (list = *(void **)PDEQ_SHOWLIST) != (void *)0 && deque_size(list))
         se.lists[SE_SONG] = list;
     *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS;
@@ -898,6 +904,9 @@ static void se_prep(grid_tile_t *t, int r) {
     case SE_PLAYLIST:
         snprintf(sub, sizeof sub, "%s", TR("Playlist"));
         break;
+    case SE_LABEL:
+        snprintf(sub, sizeof sub, "%s", TR("Label"));
+        break;
     default:
         if (!*title) title = cc_str(rec, REC_NAME);
         snprintf(sub, sizeof sub, *a ? "%s \xc2\xb7 %s" : "%s", TR("Song"), a);
@@ -1183,6 +1192,9 @@ static __attribute__((noinline)) void se_open_row(int i) {
             navigator_to_with_context("allmusic_page", (const void *)CLASS_PLAYLIST_SONGS);
         }
         break;
+    case SE_LABEL: /* as the Labels page's tap: the label's albums */
+        albums_open_label(cc_str(deque_at(se.lists[SE_LABEL], se.rows[i].idx), REC_TITLE));
+        break;
     default:
         if (!se_valid()) {
             se.wait = 1; /* another query replaced the list: it is read again, the tap is lost */
@@ -1318,6 +1330,7 @@ static void se_art(grid_t *g, grid_tile_t *t, int r) {
         grid_art_url(g, t, *url ? url : (const char *)0);
         return;
     case SE_PLAYLIST:
+    case SE_LABEL:
         break;
     default:
         t->ckey = cc_cover_key(se.lists[SE_ALBUM], cc_album_key(rec), cc_str(rec, REC_ALBUM), url);
@@ -1406,10 +1419,12 @@ static int se_on_destroy(void *ctx, void *e) {
  * exists already, or the window or its widgets are not there): the caller opens the stock search page. scope is SEARCH_ALL or one type: that page shows its one chip (selected, the others
  * not drawn or tappable) and matches only that type. */
 static int se_open(int scope, const lib_src_t *src) {
-    if (se.win || se.titles || scope < SEARCH_ALL || scope >= SE_CHIPS) return -1;
+    if (se.win || se.titles || scope < SEARCH_ALL || scope >= SE_CHIPS || (src && scope == SEARCH_LABELS))
+        return -1; /* (a source has no labels) */
     memset(&se, 0, sizeof se);
     se.src = src;
     se.lo = scope == SEARCH_ALL ? 0 : scope, se.hi = scope == SEARCH_ALL ? SE_CHIPS : scope + 1;
+    if (src && scope == SEARCH_ALL) se.hi = CH_LABELS; /* ... nor their chip */
     se.win = window_open("m1plus_search");
     if (!se.win) {
         memset(&se, 0, sizeof se);

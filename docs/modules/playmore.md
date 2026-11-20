@@ -143,6 +143,10 @@ hairline. The dialog gets `highlight`. New row glyphs: `pod_ic_tape`, `pod_ic_vi
   file. Stock's own stream types (2, 3, `0xf0`, `0xf1`) keep stock's rows. A downloaded Subsonic
   track is a file and keeps both rows. Checked at layout and again at
   the tap (`pm_stream_now`).
+- **Add to playlist opens our picker** ([picker](picker.md)) on the playing track
+  (`picker_open_one(CLASS_ALL_SONGS, cc_playing())`), then closes the sheet and answers `RET_STOP`.
+  Where the picker does not open (nothing playing, no window), `pm_on_addpl` answers `RET_OK` and
+  stock's handler runs (`player_addplayList`, then its own picker).
 - **Delete asks first, about one track.** `pm_on_delete` redoes stock's handler (`msg_delsong`
   confirm; answer `0xa` deletes from the queue, `0x14` the file too) with two differences. The
   sheet closes before the confirm opens (the glass confirm is translucent). The track is checked

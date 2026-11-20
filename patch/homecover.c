@@ -23,6 +23,7 @@
 #include "artistphoto.h"
 #include "artsplit.h"
 #include "durations.h"
+#include "labels.h"
 #include "common.h"
 #include "i18n.h"
 
@@ -60,6 +61,7 @@ static struct {
     void *songs;
     unsigned lcur, lcount, lsaved;
     int len, lmore, lerr;
+    int lkind; /* the pass's table: 0 the durations, then 1 the record labels (patch/labels.c); the tracks line is stamped when both are complete */
     int trunc; /* the cover pass could not queue every missing album (CC_MAX_JOBS, or no memory): not stamped, another chunk follows it */
     unsigned rows[SH_TILES]; /* the shelf's albums (recent_rekey) the scan's order puts first, and how many */
     int shelf;
@@ -187,7 +189,10 @@ static void hc_lib_of(void *list) {
 
 /* What is out of date by the stamp against lib: bit 1 covers, bit 2 track lengths, bit 8 artist photos (4 is hc_expect's probe). */
 static int hc_stale(void) {
-    return (st.c && st.cn == lib.n && st.ch == lib.h ? 0 : 1) | (st.t && st.tn == lib.n && st.th == lib.h ? 0 : 2) |
+    return (st.c && st.cn == lib.n && st.ch == lib.h ? 0 : 1) |
+           (st.t && st.tn == lib.n && st.th == lib.h && !access(LB_FILE, F_OK)
+                ? 0
+                : 2) | /* (no labels table: a stamp from before labels) */
            (st.a && st.an == lib.n && st.ah == lib.h ? 0 : 8);
 }
 
@@ -226,8 +231,9 @@ static unsigned hl_clean __attribute__((section(".scratch"))), hl_sum __attribut
         ".scratch"))); /* the library signature (albums + 1, key sum) of a pass that found every song in the table (and the clears then): not read again until that changes */
 
 /* A pass found every song of the library as lib says in the table. */
-static void hl_mark(void) { hl_clean = lib.n + 1, hl_sum = lib.h, hl_epoch = dur_epoch(); }
-static int hl_marked(void) { return lib.have && hl_clean == lib.n + 1 && hl_sum == lib.h && hl_epoch == dur_epoch(); }
+static unsigned hl_clears(void) { return dur_epoch() ^ lb_epoch() << 16; }
+static void hl_mark(void) { hl_clean = lib.n + 1, hl_sum = lib.h, hl_epoch = hl_clears(); }
+static int hl_marked(void) { return lib.have && hl_clean == lib.n + 1 && hl_sum == lib.h && hl_epoch == hl_clears(); }
 
 /* The pill shown or hidden (visible and sensitive together) and the list below it made room for. */
 static void hc_show(int on) {
@@ -305,7 +311,7 @@ static void hc_text(void) {
     int photos = !hc.len && hc.cn != (unsigned)cc_build_total() &&
                  cc_build_done() >= (int)hc.cn; /* the artist photo jobs follow the cover jobs in the set */
     snprintf(text, sizeof text, "%s %d/%d",
-             TR(hc.len       ? "Measuring tracks"
+             TR(hc.len       ? (hc.lkind ? "Reading labels" : "Measuring tracks")
                 : photos     ? (hc.arebuild ? "Rebuilding artist photos" : "Preparing artist photos")
                 : hc.rebuild ? "Rebuilding covers"
                              : "Preparing covers"),
@@ -333,12 +339,33 @@ static void hc_free_scan(void) {
     hc.astage = 0;
 }
 
-/* The durations the worker finished since the last save go into the table (merged, written atomically). */
+/* The labels the worker finished since the last save go into their table. */
+static void hc_lbl_save(int done) {
+    int i;
+    unsigned n = 0;
+    const char *l;
+    lb_add_t *e = calloc((unsigned)(done - (int)hc.lsaved), sizeof *e);
+    if (!e) {
+        hc.lerr = 1;
+        return;
+    }
+    for (i = (int)hc.lsaved; i < done; i++)
+        if (cc_build_lbl(i, &e[n].key, &e[n].size, &l)) snprintf(e[n].label, sizeof e[n].label, "%s", l), n++;
+    if (lb_merge(e, n)) hc.lerr = 1;
+    free(e);
+    hc.lsaved = (unsigned)done;
+}
+
+/* The durations (or labels) the worker finished since the last save go into the table (merged, written atomically). */
 static void hc_dur_save(void) {
     int done = cc_build_done(), i;
     unsigned n = 0;
     dur_ent_t *e;
     if (hc.len != 2 || done <= (int)hc.lsaved) return;
+    if (hc.lkind) {
+        hc_lbl_save(done);
+        return;
+    }
     e = calloc(1, ((unsigned)(done - (int)hc.lsaved) * sizeof *e));
     if (!e) {
         hc.lerr = 1;
@@ -359,7 +386,7 @@ static void hc_end(void) {
     hc_dur_save();
     if (hc.own) cc_build_stop();
     hc.own = 0;
-    if (hc.len) dur_release();
+    if (hc.len) hc.lkind ? lb_release() : dur_release();
     hc.len = 0;
     hc.wait = 0;
     hc_dots_stop();
@@ -367,9 +394,22 @@ static void hc_end(void) {
 }
 
 static int hc_on_dscan(const void *unused);
+static void hc_len_begin(int kind);
+static void hc_dur_begin(void) { hc_len_begin(0); }
+
+/* A pass over the tables ran to its end with nothing left to queue: the durations go on to the labels; the labels complete the tracks line. */
+static void hc_len_complete(void) {
+    int kind = hc.lkind;
+    hc_end();
+    if (!kind) {
+        hc_len_begin(1);
+        return;
+    }
+    hl_mark(), hc_stamp(2);
+}
 
 /* The song length pass: the library's songs are read (one stock query, as the covers' albums are), looked up in the table in steps, the ones it lacks queued for the worker. */
-static void hc_dur_begin(void) {
+static void hc_len_begin(int kind) {
     unsigned cap;
     int failed;
     if (!hc.win || !hc.fg || hc_off || hc.own || hc.len || hc.timer || cc_build_busy() || !m1_card_mounted()) {
@@ -385,17 +425,21 @@ static void hc_dur_begin(void) {
     hc.songs = cc_songs();
     failed = !hc.songs && cc_list_failed();
     hc.lcount = hc.songs ? deque_size(hc.songs) : 0;
-    cap = hc.lcount < CC_MAX_LEN_JOBS ? hc.lcount : CC_MAX_LEN_JOBS;
+    cap =
+        hc.lcount < (kind ? CC_MAX_LBL_JOBS : CC_MAX_LEN_JOBS) ? hc.lcount : (kind ? CC_MAX_LBL_JOBS : CC_MAX_LEN_JOBS);
     if (!cap && !failed && !hc.count)
         hc_stamp(
             2); /* no songs in a library with no albums: nothing to measure. Albums but no songs is a failed read (stock answers empty to a failed query): no line, Home asks again */
-    if (!cap || !cc_build_open(cap, CC_DURATIONS)) {
+    if (!cap || !cc_build_open(cap, kind ? CC_LABELS : CC_DURATIONS)) {
         hc_free_scan();
         hc_show(0);
         return;
     }
-    dur_acquire();
-    dur_pass_begin();
+    if (kind)
+        lb_acquire(), lb_pass_begin();
+    else
+        dur_acquire(), dur_pass_begin();
+    hc.lkind = kind;
     hc.len = 1, hc.own = 1, hc.lcur = hc.lsaved = 0, hc.lmore = hc.lerr = 0;
     hc.timer = timer_add(hc_on_dscan, (void *)0, HC_SCAN_MS);
     if (!hc.timer) hc_end();
@@ -413,11 +457,15 @@ static int hc_on_dpoll(const void *unused) {
         if (done - (int)hc.lsaved >= HC_LSAVE) hc_dur_save();
     }
     if (done >= cc_build_total()) {
+        int kind = hc.lkind;
         hc_dur_save();
         more = hc.lmore && !hc.lerr; /* more songs than one set holds: another pass */
-        if (!hc.lmore && !hc.lerr) hl_mark(), hc_stamp(2);
+        if (!hc.lmore && !hc.lerr) {
+            hc_len_complete();
+            return RET_OK;
+        }
         hc_end();
-        if (more) hc_dur_begin();
+        if (more) hc_len_begin(kind);
         return RET_OK;
     }
     hc.timer = timer_add(hc_on_dpoll, (void *)0, HC_POLL_MS);
@@ -436,12 +484,19 @@ static int hc_on_dscan(const void *unused) {
         const char *path = (const char *)P(r, REC_PATH);
         long size;
         if (!path || !*path) continue;
-        dur_pass_seen(path);
-        if (I(r, REC_CUE_END) > I(r, REC_CUE_START) || dur_has(path) || hc.lmore)
-            continue; /* nothing to measure, or the set is full */
+        if (hc.lkind) {
+            lb_pass_seen(path);
+            if (lb_has(path) || hc.lmore) continue; /* (a CUE image's file has the tags of its tracks) */
+        } else {
+            dur_pass_seen(path);
+            if (I(r, REC_CUE_END) > I(r, REC_CUE_START) || dur_has(path) || hc.lmore)
+                continue; /* nothing to measure, or the set is full */
+        }
         ++stat;
         size = cc_file_size(path);
-        if (size > 0 && size <= 0x7fffffff && cc_build_add_dur(path, dur_key(path), (unsigned)size) < 0) hc.lmore = 1;
+        if (size > 0 && size <= 0x7fffffff &&
+            cc_build_add_dur(path, hc.lkind ? lb_key(path) : dur_key(path), (unsigned)size) < 0)
+            hc.lmore = 1;
     }
     if (hc.lcur < hc.lcount) {
         hc.timer = timer_add(hc_on_dscan, (void *)0, HC_SCAN_MS);
@@ -449,9 +504,12 @@ static int hc_on_dscan(const void *unused) {
         return RET_OK;
     }
     hc_free_scan();
-    dur_pass_end(); /* the entries of files no song names any more */
+    hc.lkind ? lb_pass_end() : dur_pass_end(); /* the entries of files no song names any more */
     if (!cc_build_total()) { /* every song is in the table */
-        if (!hc.lmore) hl_mark(), hc_stamp(2);
+        if (!hc.lmore) {
+            hc_len_complete();
+            return RET_OK;
+        }
         hc_end();
         return RET_OK;
     }
@@ -1012,7 +1070,7 @@ static void cp_status(char *buf, unsigned n) {
         snprintf(buf, n, "%s", TR("Clearing"));
     else if (hc.own)
         snprintf(buf, n, "%s %d/%d",
-                 TR(hc.len       ? "Measuring tracks"
+                 TR(hc.len       ? (hc.lkind ? "Reading labels" : "Measuring tracks")
                     : hc.rebuild ? "Rebuilding"
                                  : "Preparing"),
                  cc_build_done(), total);

@@ -415,7 +415,7 @@ def mosaic(rgbs, size, r):
     for q, k in enumerate(quad): im.paste(sample_cover(rgbs[k], h), ((q & 1) * h, (q >> 1) * h))
     return rounded(im, r)
 
-def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None, pick=False, order='az'):
+def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, select=None, pick=False, order='az', recent=()):
     """ui/m1plus_playlists.bin as patch/playlists.c paints it: the Albums grid's cells (a mosaic cover, the playlist's name in 18 px, "N tracks" in
     15 px #AAAAAA) under a navbar with the "..." button; menu=True: the popup card open (row `pressed` held down) under the button. select: the set of marked
     playlists (indexes into PLAYLISTS) in select mode (the menu's Delete Playlists): the glass x, "N Selected", Select All, a mark on every cell or row (the list's rows
@@ -457,8 +457,10 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
         def lcut(text, px):
             while s.font.width(text, px) > o['LIST_TEXT_W'] - shift and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
             return text
-        rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + pls if pick else pls   # the picker's first rows make a playlist and add to Favourites: no count
-        for r, (name, tracks, albums) in enumerate(rows):
+        # the picker's first rows make a playlist and add to Favourites (no count); then the recent playlists (names in PLAYLISTS, newest first), "Recent · N tracks"
+        rec = [next(p for p in PLAYLISTS if p[0] == n) + (True,) for n in recent]
+        rows = [(s.strings.get('New playlist', 'New playlist'), None, []), (s.strings.get('Favorites', 'Favorites'), None, [])] + rec + pls if pick else pls
+        for r, (name, tracks, albums, *was) in enumerate(rows):
             y = 50 + o['SG_TITLE_H'] + r * rh   # the rows start under the large title block
             if y + rh > H_: break
             if r == row_pressed: d.rectangle((0, y, W_ - 1, y + rh - 2), fill=(0x33, 0x33, 0x33))
@@ -479,6 +481,7 @@ def playlists_grid(s, menu=False, pressed=3, list_mode=False, row_pressed=1, sel
             im.alpha_composite(mosaic([ALBUMS[i][2] for i in albums if ALBUMS[i][2]], o['LIST_ART'], o['LIST_R']), (o['LIST_ART_X'] + shift, y + o['LIST_ART_Y']))
             s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_TITLE_Y'] + o['LIST_TITLE_H'] / 2, lcut(name, 21), 21)
             count = s.strings.get('%d track' if tracks == 1 else '%d tracks', '%d tracks').replace('%d', str(tracks))
+            if was: count = s.strings.get('Recent', 'Recent') + ' · ' + count   # patch/playlists.c pl_texts: a recent playlist's subtitle
             if tracks is not None: s.text(im, o['LIST_TEXT_X'] + shift, y + o['LIST_SUB_Y'] + o['LIST_SUB_H'] / 2, lcut(count, 18), 18, (0xAA, 0xAA, 0xAA))
             if select is not None: mark(o['LIST_ART_X'] + (shift - 6 - o['SG_MARK']) // 2, y + (rh - o['SG_MARK']) // 2, r)
         if menu: card()

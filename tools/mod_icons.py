@@ -142,7 +142,7 @@ DAILY = DAILY + VU
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 10, 16, (0x8A,) * 3), ('pod_check', 20)
 CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
-               'EQ': 'sliders-vertical', 'Playback Settings': 'headphones', 'Play Mode': 'repeat', 'Gapless': 'infinity', 'Resume': 'history', 'Folder Skip': 'folder', 'Gain': 'gauge', 'ReplayGain': 'scale', 'Digital Filter': 'waves', 'DSD Output Mode': 'audio-lines', 'USB Volume': 'monitor-speaker', 'Digital Output': 'cable', 'Folder Album Cover': 'image', 'Max Volume': 'volume-2', 'Default Volume': 'volume-1', 'Channel Balance': 'sliders-horizontal', 'Mono Audio': 'volume', 'Crossfeed': 'headphones', 'Volume Memory': 'memory-stick', 'Volume & Sound': 'volume-2', 'Output': 'monitor-speaker', 'Display': 'sun', 'Buttons & Power': 'power', 'Button Lock': 'lock-keyhole', 'Tap to Wake': 'pointer', 'Auto-Standby': 'moon', 'Auto-Shutdown': 'power', 'Screen Timeout': 'timer', 'LED Light': 'lightbulb', 'Appearance': 'palette', 'General': 'settings', 'Accent': 'palette', 'Background': '+contrast',
+               'EQ': 'sliders-vertical', 'Playback Settings': 'headphones', 'Play Mode': 'repeat', 'Gapless': 'infinity', 'Resume': 'history', 'Folder Skip': 'folder', 'Gain': 'gauge', 'ReplayGain': 'scale', 'Digital Filter': 'waves', 'DSD Output Mode': 'audio-lines', 'USB Volume': 'monitor-speaker', 'Digital Output': 'cable', 'Folder Album Cover': 'image', 'Max Volume': 'volume-2', 'Default Volume': 'volume-1', 'Channel Balance': 'sliders-horizontal', 'Mono Audio': 'volume', 'Crossfeed': 'headphones', 'Volume Memory': 'memory-stick', 'Volume & Sound': 'volume-2', 'Output': 'monitor-speaker', 'Display': 'sun', 'Buttons & Power': 'power', 'Button Lock': 'lock-keyhole', 'Tap to Wake': 'pointer', 'Auto-Standby': 'moon', 'Auto-Shutdown': 'power', 'Screen Timeout': 'timer', 'LED Light': 'lightbulb', 'Appearance': 'palette', 'General': 'settings', 'Accent': 'palette', 'Scheme': 'sun-moon', 'Background': '+contrast',
                'Control Center': 'layout-grid', 'Lock Screen': 'lock', 'Wallpaper': 'image', 'Enable': 'lock', 'Show Time': 'clock', 'Player Style': 'square-play', 'Custom Wallpaper': 'info',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
@@ -172,7 +172,9 @@ CARD_TALL_IMAGES = [f'pod_cdl_{p}{d}' for p in CARD_PIECES for d in ('', '_down'
 # The Accent picker's swatches (docs/modules/accent.md): a round disc of accent i (tools/palette.py ACCENTS' order; Neutral is today's #EEEEEC fill) where a row's glyph goes, SWATCH_PX in the glyph's canvas.
 SWATCH_PX = 20
 SWATCHES = [f'pod_sw{i}' for i in range(7)]
-CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES + ['pod_sl_thumb']
+SCHEME_SWATCHES = [f'pod_sw_s{i}' for i in range(9)]   # the Scheme picker's: Classic none (transparent, so the labels line up), a riso scheme its day ink and accent, Greyscale a grey
+SCHEME_GREY = (0x8C,) * 3
+CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES + SCHEME_SWATCHES + ['pod_sl_thumb']
 # Find Cover & Lyrics' empty and failed states (docs/modules/onlineart.md): a muted grey glyph, ES_PX px, stroke 2, over the state's title (tools/pod_ui.py oa_es_icon; patch/onlineart.c names them)
 ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-off', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
@@ -226,7 +228,7 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
             'Composers': ('pod_ic_composers', 'feather'), 'Hi-Res': ('pod_ic_hires', '+badge-hr'),
             'Update Library': ('pod_ic_update', 'refresh-cw'), 'Tidal': ('pod_ic_tidal', 'T:brand-tidal'),
-            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'), 'Audiobooks': ('pod_ic_audiobooks', 'book-headphones'), 'Radio': ('pod_ic_radio', 'radio'),
+            'CD Ripper': ('pod_ic_cdripper', 'disc'), 'Pod': ('pod_ic_ipod', '+ipod'), 'Podcasts': ('pod_ic_podcasts', 'podcast'), 'Search': ('pod_ic_search', 'search'), 'Audiobooks': ('pod_ic_audiobooks', 'book-headphones'), 'Labels': ('pod_ic_labels', 'tag'), 'Radio': ('pod_ic_radio', 'radio'),
             'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'VU Meter Mode': ('pod_ic_vu', 'gauge'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics'), 'Sleep Timer': ('pod_ic_sleep', 'moon'), 'Display Mode': ('pod_ic_mode', 'smartphone'),   # Now Playing's More sheet rows (tools/mod_lists.py)
             # the Control Center page (pod_pages.PULLDOWN_TILES): each tile's own glyph (PULLDOWN below); Output's tile shows the text PO / LO, so its row has stock's Output glyph (sset_outputway)
             'Wi-Fi': ('pod_ic_wifi', 'wifi'), 'Bluetooth': ('pod_ic_bt', 'bluetooth'), 'Button Lock': ('pod_ic_lock', 'lock'), 'Gain': ('pod_ic_gain', '+gain-high'),
@@ -618,6 +620,25 @@ def swatch(i):
     im = Image.new('RGBA', (POD_ICON,) * 2, tuple(rgb) + (0,)); im.putalpha(big.resize((POD_ICON,) * 2, Image.LANCZOS)); return im
 
 
+def scheme_swatch(i):
+    """The Scheme picker's swatch i: a cream paper (#F4F1EA) disc of SWATCH_PX with an inset disc split down the middle (left the scheme's day ink, right its accent), so it shows on the dark card
+    and on cream; Greyscale one grey inset; Classic nothing."""
+    from PIL import Image, ImageDraw
+    import palette
+    ss = 8; PAPER = (0xF4, 0xF1, 0xEA); INSET = 4
+    im = Image.new('RGBA', (POD_ICON,) * 2, (0, 0, 0, 0))
+    if not i: return im
+    def disc(inset):
+        big = Image.new('L', (POD_ICON * ss,) * 2, 0); o = ((POD_ICON - SWATCH_PX) // 2 + inset) * ss
+        ImageDraw.Draw(big).ellipse((o, o, o + (SWATCH_PX - 2 * inset) * ss - 1, o + (SWATCH_PX - 2 * inset) * ss - 1), fill=255)
+        return big.resize((POD_ICON,) * 2, Image.BOX)
+    name = palette.SCHEMES[i]
+    left, right = (SCHEME_GREY,) * 2 if name == 'greyscale' else (palette.scheme_ends(name)[1], palette.scheme_accent(name))
+    paper = Image.new('RGBA', (POD_ICON,) * 2, PAPER + (0,)); paper.putalpha(disc(0)); im.alpha_composite(paper)
+    ink = Image.new('RGBA', (POD_ICON,) * 2, tuple(left) + (0,)); ink.paste(Image.new('RGBA', (POD_ICON // 2, POD_ICON), tuple(right) + (0,)), (POD_ICON // 2, 0))
+    ink.putalpha(disc(INSET)); im.alpha_composite(ink); return im
+
+
 DROP_GRABBER = ('drop_grabber', 36, 5)   # name, w, h (= GRABBER's pill)
 SLIDER_THUMB = ('pod_sl_thumb', 38, 24, 46, 34)   # the settings slider's thumb (name, the capsule's width and height, the canvas)
 
@@ -823,6 +844,7 @@ def generate_all(sizes):
     f[name] = pod_chevron(rgb)
     f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
     for i, n in enumerate(SWATCHES): f[n] = swatch(i)
+    for i, n in enumerate(SCHEME_SWATCHES): f[n] = scheme_swatch(i)
     f[SLIDER_THUMB[0]] = slider_thumb()
     f[DROP_GRABBER[0]] = pil_glyph('drop_grabber', DROP_GRABBER[1:], *NP_TONES['ghost'])   # the pull-down's grabber: Now Playing's pill (GRABBER, the ghost tone) on a canvas of just the pill
     for n, (g, px, rgb) in WIFI_GLYPHS.items(): f[n] = glyph_fit(g, px, px, rgb, 1, 2.0 if px >= 22 else 1.5)

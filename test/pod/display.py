@@ -183,7 +183,7 @@ def settings_tests(ctx):
            'Settings > Display opens our page')
     lay = [x.label if isinstance(x, P.Row) else x for x in V.layout]
     expect(lay[-4:] == ['Battery', P.GAP, 'All System Settings', 'Developer'], f'the last card: All System Settings, Developer ({lay[-4:]})')
-    expect(P.PAGES[P.DISPLAY_PAGE_INDEX] is D and P.PAGES[P.LIGHTTIME_PAGE_INDEX] is L and P.PAGES[P.LED_PAGE_INDEX] is E and (P.LIGHTTIME_PAGE_INDEX, P.LED_PAGE_INDEX) == (73, 74)
+    expect(P.PAGES[P.DISPLAY_PAGE_INDEX] is D and P.PAGES[P.LIGHTTIME_PAGE_INDEX] is L and P.PAGES[P.LED_PAGE_INDEX] is E and (P.LIGHTTIME_PAGE_INDEX, P.LED_PAGE_INDEX) == (74, 75)
            and (D.key, D.title, L.key, L.title, E.key, E.title) == ('m1plus_display', 'Display', 'm1plus_lighttime', 'Screen Timeout', 'm1plus_ledlight', 'LED Light'), 'the three pages')
     expect([(r.label, r.action, r.arg) for r in D.rows] == [('Screen Timeout', P.ACT_LIGHT, P.LIGHTTIME_PAGE_INDEX), ('Lock Screen', P.ACT_PAGE, P.LOCK_PAGE_INDEX), ('Screen Rotation', P.ACT_ROTATE, 0), ('LED Light', P.ACT_LED, P.LED_PAGE_INDEX)]
            and [P.row_kind(r) for r in D.rows] == ['value', 'link', 'switch', 'value'], 'the Display page\'s rows: Screen Timeout, Lock Screen, Screen Rotation, LED Light')

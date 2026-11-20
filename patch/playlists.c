@@ -149,11 +149,23 @@ static struct {
     unsigned timer;
     void *stash;
     void *star; /* the Favourites row's glyph: a 24 px white star, alpha bitmap */
+    unsigned nrec,
+        rslot
+            [PICKER_RECENT]; /* the recent playlists' rows after Favourites: their index in the copy of the stock list, newest first */
+    char name[64]; /* the new playlist's name, for the message once the add timer fires */
 } pick __attribute__((section(".scratch")));
-static int pl_v(void) { return pick.on ? 2 : 0; } /* the rows before the playlists: New playlist, Favourites */
+static int pl_fixed(void) {
+    return pick.on ? 2 : 0;
+} /* the picker's rows that are no playlist: New playlist, Favourites */
+static int pl_v(void) {
+    return pick.on ? 2 + (int)pick.nrec : 0;
+} /* the rows before the A-Z playlists: those two and the recent playlists */
 /* The stock playlist (index in the copy of the stock list) shown at display position k, after the picker's rows. */
 static unsigned pl_slot(unsigned k) { return pl.ord ? pl.ord[k] : k; }
-static void *pl_rec(int i) { return deque_at(pl.pls, pl_slot((unsigned)(i - pl_v()))); }
+static void *pl_rec(int i) {
+    return i < pl_v() ? deque_at(pl.pls, pick.rslot[i - pl_fixed()])
+                      : deque_at(pl.pls, pl_slot((unsigned)(i - pl_v())));
+}
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
 
@@ -198,11 +210,16 @@ static void pl_texts(tile_t *t, int a) {
     info_t *in = &pl.info[a];
     char sub[48];
     sub[0] = 0;
-    if (a < pl_v()) {
+    if (a < pl_fixed()) {
         grid_set(t, TR(a ? "Favorites" : "playlist_create"), sub, 0);
         return;
     }
     if (in->scanned) m1_fmt(sub, sizeof sub, TR(in->songs == 1 ? "%d track" : "%d tracks"), in->songs);
+    if (a < pl_v()) { /* a recent playlist: "Recent", then " · N tracks" once read */
+        char count[48];
+        snprintf(count, sizeof count, "%s", sub);
+        snprintf(sub, sizeof sub, count[0] ? "%s · %s" : "%s", TR("Recent"), count);
+    }
     grid_set(t, cc_str(pl_rec(a), REC_TITLE), sub, 0);
 }
 
@@ -241,7 +258,7 @@ static void pl_prep(tile_t *t, int a) {
     info_t *in = &pl.info[a];
     grid_free_art(t);
     t->fit = 0, t->art = 0, t->qi = 0;
-    t->mid = a < pl_v();
+    t->mid = a < pl_fixed();
     t->nq = in->nk > 1 && !pl.tmp ? 1 : in->nk;
     memcpy(t->qkey, in->key, sizeof t->qkey);
     if (in->scanned && !in->nk) t->art = 2; /* no album with a cover: the placeholder */
@@ -365,8 +382,8 @@ static int pl_on_paint(void *ctx, void *e) {
     if (r1 >= r0 && pl.list) {
         grid_list_paint(canvas, &pl.g, pl.st_ltitle, pl.st_lsub, r0, r1, co, GRID_VIEW_H, pl.select ? 0 : pl.press,
                         pl.select ? SG_SEL_COL : 0, !pl.select && !pl_v(), pl_tile_of, (void *)0);
-        if (pl_v() && r0 == 0) pl_plus(canvas, LIST_ART_Y - co);
-        if (pl_v() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - co);
+        if (pl_fixed() && r0 == 0) pl_plus(canvas, LIST_ART_Y - co);
+        if (pl_fixed() && r0 <= 1 && r1 >= 1) pl_star(canvas, LIST_ROW_H + LIST_ART_Y - co);
         for (a = r0; pl.select && pl.mark[0] && a <= r1; ++a)
             pl_mark(canvas, a, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2,
                     a * LIST_ROW_H - co + (LIST_ROW_H - SG_MARK) / 2);
@@ -411,7 +428,7 @@ static void pl_scan(int i) {
     info_t *in = &pl.info[i];
     int n, miss;
     void *list;
-    if (i < pl_v()) { /* the picker's New playlist and Favourites rows have nothing to read */
+    if (i < pl_fixed()) { /* the picker's New playlist and Favourites rows have nothing to read */
         in->scanned = 1;
         return;
     }
@@ -661,6 +678,22 @@ static int pl_carry(void *old, unsigned oldn, const unsigned *oldord, unsigned n
     return 1;
 }
 
+/* The picker's recent playlists (patch/picker.c picker_recent): each saved id that is one of the shown playlists, newest first. None outside the picker. */
+static void pl_recent(void) {
+    int ids[PICKER_RECENT], n, k;
+    unsigned j, size = pl.pls ? deque_size(pl.pls) : 0;
+    pick.nrec = 0;
+    if (!pick.on || pl.src || !size) return;
+    if (size > PL_MAX) size = PL_MAX;
+    n = picker_recent(ids, PICKER_RECENT);
+    for (k = 0; k < n; ++k)
+        for (j = 0; j < size; ++j)
+            if (I(deque_at(pl.pls, j), REC_DISC) == ids[k]) {
+                pick.rslot[pick.nrec++] = j;
+                break;
+            }
+}
+
 static void pl_load(void) {
     void *list, *old = pl.pls;
     unsigned oldn = pl.count, *oldord = pl.ord, was = pl.count;
@@ -689,6 +722,7 @@ static void pl_load(void) {
         }
         picker_restore();
     }
+    pl_recent();
     pl.count = (pl.pls ? deque_size(pl.pls) : 0) + (unsigned)pl_v();
     if (pl.count > PL_MAX + (unsigned)pl_v()) pl.count = PL_MAX + (unsigned)pl_v();
     /* Nothing changed (the same playlists, the database file untouched since the scans were made): the scans and the tiles stay (a visit to a playlist's songs page or a
@@ -712,7 +746,7 @@ static void pl_load(void) {
             free(pl.info);
             pl.info = pl.count ? calloc(pl.count, sizeof(info_t)) : (info_t *)0;
             if (pl.count && !pl.info) pl.count = 0;
-            for (i = 0; pl.info && i < pl_v(); ++i)
+            for (i = 0; pl.info && i < pl_fixed(); ++i)
                 pl.info[i].scanned = 1; /* New playlist, Favourites: nothing to read */
             grid_placeholder(&pl.g);
         }
@@ -811,7 +845,7 @@ static int pl_item_of(void *e) {
  * stock Playlists page's row handler (@0x53d300, mode 0): the name for the page's title, the id into classinfo[1], then the stock Songs page with the
  * playlist class. Back returns here. */
 static void pl_create(void);
-static void pl_pick_add(int id);
+static void pl_pick_add(int id, const char *name);
 static void pl_pick_later(int id);
 
 /* A tap on a source's playlist: its Songs page; if that page does not open, the playlist plays in order (the tap of a row). */
@@ -830,7 +864,7 @@ static void pl_open(int i) {
         if (i == 0)
             pl_create();
         else
-            pl_pick_add(i == 1 ? PICKER_FAVOURITES : pl_id(i));
+            pl_pick_add(i == 1 ? PICKER_FAVOURITES : pl_id(i), i == 1 ? TR("Favorites") : cc_str(pl_rec(i), REC_TITLE));
         return;
     }
     rec = pl_rec(i);
@@ -1000,6 +1034,7 @@ static void pl_named(const char *name) {
     else if (
         r >= 0 && pl_v() &&
         pl.win) { /* the picker: the new playlist gets the songs, the page closes, once the keyboard page has gone (pl_pick_later) */
+        snprintf(pick.name, sizeof pick.name, "%s", name);
         pl_pick_later(r);
         return;
     }
@@ -1007,9 +1042,9 @@ static void pl_named(const char *name) {
 }
 
 /* The picker's add (patch/picker.c: batch_add_file, the message), then the page closes as the stock picker's handler closes its window (window_close on the row's window). */
-static void pl_pick_add(int id) {
+static void pl_pick_add(int id, const char *name) {
     void *win = pl.win;
-    picker_add(id);
+    picker_add(id, name);
     if (win) window_close(win);
 }
 
@@ -1019,7 +1054,7 @@ static void pl_pick_add(int id) {
 static int pl_pick_fire(const void *unused) {
     (void)unused;
     pick.timer = 0;
-    if (pick.on && pl.win) pl_pick_add(pick.id);
+    if (pick.on && pl.win) pl_pick_add(pick.id, pick.name);
     return RET_OK;
 }
 
@@ -1027,7 +1062,7 @@ static void pl_pick_later(int id) {
     if (pick.timer) return;
     pick.id = id;
     pick.timer = timer_add(pl_pick_fire, (void *)0, PL_PICK_MS);
-    if (!pick.timer) pl_pick_add(id); /* no timer: now */
+    if (!pick.timer) pl_pick_add(id, pick.name); /* no timer: now */
 }
 
 static void pl_create(void) {

@@ -35,6 +35,19 @@ int pal_accent_set(int index);
 unsigned pal_accent_color(int index);
 unsigned pal_fill(void);
 
+/* The scheme (/mnt/data/m1plus/appearance-scheme, tools/palette.py SCHEMES): 0 Classic (Background and Accent apply), 1 .. 7 the riso schemes (paper, ink and one accent; cream by
+ * day, the dark paper by night, Light Auto's clock), SCHEME_GREY Greyscale (Black + Neutral, covers in grey). A scheme other than Classic overrides the Background and Accent files.
+ * pal_scheme() is the saved one (read at the first call); pal_scheme_on() the effective one (Classic under the kill switch or the bad-boot note). pal_scheme_set(s) saves it atomically,
+ * applies it at once (cached images dropped, the tinted pages and the screen repainted) and returns s, or -1 (outside 0 .. SCHEME_COUNT - 1, or a failed save: nothing changes).
+ * Under a riso scheme pal_light() is 1 by day (the remap inverts) and 0 by night (it remaps without inverting), and pal_accent() is PAL_SCHEME_ACC + scheme: pal_accent_color() and
+ * pal_fill() answer the scheme's accent for it. */
+#define PAL_SCHEME_ACC 16 /* above every accent index, so pal_accent_color(ACC_COUNT ..) stays Neutral */
+int pal_scheme(void);
+int pal_scheme_on(void);
+int pal_scheme_set(int s);
+/* 1 when the last change of the effective state (pal_apply) turned Greyscale on or off: the relight functions then look at their covers and tones again. */
+int pal_regrey(void);
+
 /* A colour (color_t: bytes r, g, b, a) as the payload draws it: flipped in Light Mode when neutral, else as it is. A clear colour (alpha 0) stays clear. */
 unsigned ui_ink(unsigned c);
 
@@ -47,7 +60,8 @@ int pal_bg_set(int mode);
 /* The flip of one neutral channel / colour and the tint a cover-tinted page shows (pure; test/pod/palette.py runs them against tools/palette.py). */
 unsigned light_flip(unsigned c);
 int light_is_neutral(unsigned c);
-/* The colour a cover-tinted page puts under its text: the tone itself (never a role colour: pal_not_role), or in Light Mode the page's neutral colour (the chromatic dark tone cannot flip, and the page's text does). */
+/* The colour a cover-tinted page puts under its text: the tone itself (never a role colour: pal_not_role), or in Light Mode the page's neutral colour (the chromatic dark tone cannot flip, and the page's text does);
+ * under Greyscale the tone's Rec. 601 luma grey. */
 unsigned pal_tone(unsigned tone);
 /* A colour derived from a cover (a tone, a shade of it, the status bar's colour) that is a role colour (a pressed row, the progress fill) moved one LSB off it; any other as it is. */
 unsigned pal_not_role(unsigned c);

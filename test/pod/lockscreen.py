@@ -448,7 +448,7 @@ def setting_tests(ctx):
            and A_.rows[ai].action == P.ACT_PAGE and A_.rows[ai].arg == P.LOCK_PAGE_INDEX and P.row_kind(A_.rows[ai]) == 'link' and A_.rows[ai - 1].label == 'Screen Timeout',
            'the Lock Screen link row (Display, a plain page row under Screen Timeout, no value) opens the Lock Screen page')
     lay = [x.label if hasattr(x, 'label') else x for x in P.APPEARANCE_PAGE.layout]
-    expect(lay == ['Background', 'Accent', P.GAP, 'Control Center'], f'Appearance cards: Background + Accent, Control Center; Lock Screen is on Display ({lay})')
+    expect(lay == ['Scheme', P.GAP, 'Background', 'Accent', P.GAP, 'Control Center'], f'Appearance cards: Scheme, Background + Accent, Control Center; Lock Screen is on Display ({lay})')
     expect(mod_icons.CARD_GLYPHS['Lock Screen'] == 'lock' and mod_icons.card_name('lock') in mod_icons.CARD_IMAGES, 'the Lock Screen row has the lock glyph')
     SP = P.LOCKSTYLE_PAGE
     expect([(r.label, r.action, r.arg) for r in L.rows] == [('Enable', P.ACT_LOCKON, 0), ('Wallpaper', P.ACT_LOCKWP, 0), ('Show Time', P.ACT_LOCKTIME, 0), ('Player Style', P.ACT_LOCKSTYLE, P.LOCKSTYLE_PAGE_INDEX),

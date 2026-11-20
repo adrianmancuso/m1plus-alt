@@ -647,6 +647,14 @@ def shelf_tests(ctx):
         m.call(PSYMS['coverflow_open'], count=20000000); paint(m)
         expect(corner(m) == want and centre_px(m) == cols[0], f'{name}: the frame is over the page colour {want} ({corner(m)}), the centre cover as it is ({centre_px(m)})')
     expect(L.wash((0, 0, 0), 'red') != (0, 0, 0), 'the Tinted page colour is not black')
+    # a riso scheme: its paper (the cream by day, the scheme's dark paper by night); Greyscale: black (its covers grey in the image hook: test/pod/palette.py grey_tests)
+    for sch, night, name, want in ((b'1\n', False, 'navy-coral by day', L.SCHEME_PAPER), (b'1\n', True, 'navy-coral by night', L.scheme_ends('navy-coral', False)[0]),
+                                   (b'5\n', False, 'purple-yellow by day', L.SCHEME_PAPER), (b'8\n', False, 'Greyscale', (0, 0, 0))):
+        k = cover_machine(albums=5); ncols = coloured(k, 5)
+        k.fs[S + 'scheme'] = sch
+        if night: k.wall = 1800000000 + 12 * 3600
+        k.call(PSYMS['coverflow_open'], count=20000000); paint(k)
+        expect(corner(k) == want and centre_px(k) == ncols[0], f'{name}: the frame is over the page colour {want} ({corner(k)}), the centre cover as it is ({centre_px(k)})')
     # the background changes under the open page (the accent picked in Settings, Light Auto's clock): the next paint draws the frame again, at the same position
     m.fs[S + 'background'] = b'1\n'; m.fs[S + 'accent'] = b'4\n'; m.call(PSYMS['pal_load'], count=20000000); paint(m)   # (pal_load: the read of both settings, without pal_apply's stock repaint)
     expect(corner(m) == L.wash((0, 0, 0), 'teal') and centre_px(m) == cols[0], f'Light to Tinted + teal with the page open: the frame follows without a drag ({corner(m)})')

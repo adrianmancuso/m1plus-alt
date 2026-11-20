@@ -2617,4 +2617,137 @@ def split_lookup_tests(ctx):
     expect(split_machine(None).call(PSYMS['as_session'], a0=1, count=4000000) == 0, 'setting off: no session')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests, reread_tests, find_photo_tests, split_tests, split_lookup_tests]
+def label_table(rows, names):
+    """The record labels' table file (patch/labels.c, as test/pod/labels.py builds it) for [(path, size, label index)] and the pool's names."""
+    ents = sorted(((fnv(O['FNV_SEED'], p) or 1), z, l) for p, z, l in rows)
+    pool = b''.join(n.encode() + b'\0' for n in names)
+    body = b''.join(struct.pack('<III', *e) for e in ents) + pool
+    return struct.pack('<5I', 0x324c314d, len(ents), len(names), len(pool), fnv_plain(body)) + body
+
+
+def label_page_tests(ctx):
+    """The Labels page (artists_open(AR_LABELS)): one row per label of the table, sorted by name, titled "Labels", "No labels" when the
+    table names none; a tap opens our Albums page on the label's albums (each album's first track's label), the label as its title, no Search row
+    and no Cover Flow button; a tap on an album opens its library row; closing releases the table."""
+    expect, P = ctx.expect, pod_pages
+    open_, LBF = PSYMS['artists_open'], '/mnt/mmc/.m1plus/labels'
+    ROWH = O['LIST_ROW_H']
+    def path(artist, album): return f'/mnt/mmc/{artist}/{album}/1.flac'
+    # Bitches Brew and Kind of Blue: Columbia; Pastel Blues: Philips; Jazz Hits: read, no label; a file of no library album: ECM (an entry's label: 1 + its pool index, 0 none)
+    rows = [(path('Miles Davis', 'Bitches Brew'), 10, 1), (path('Miles Davis', 'Kind of Blue'), 11, 1), (path('Nina Simone', 'Pastel Blues'), 12, 2),
+            (path('Miles Davis', 'Jazz Hits'), 13, 0), ('/mnt/mmc/x/y/1.flac', 14, 3)]
+    names = ['Columbia', 'Philips', 'ECM']
+    def machine(table=True):
+        m = artists_machine(albums_page=True, cls=SplitMachine)   # (the stock deque's copy: the page's rows are records on its stack)
+        if table: m.fs[LBF] = label_table(rows, names)
+        m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+        return m
+
+    expect(P.AR_LABELS == 64 and any(r.label == 'Labels' and (r.action, r.arg) == (P.ACT_ARTISTS, P.AR_LABELS) for r in P.ITEMS),
+           'the Labels menu row opens the Artists page with AR_LABELS')
+    m = machine()
+    m.call(open_, a0=P.AR_LABELS, count=40000000)
+    calls = list(m.calls)
+    expect(('window_open', 'm1plus_artists') in calls and 'loadLocalClassList' not in m.names() and 'stock_resume' not in m.names(),
+           'the Labels page opens our Artists page and asks no stock class')
+    expect(shown(m) == ['Columbia', 'ECM', 'Philips'], f'one row per label, sorted by name ({shown(m)})')
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Labels') in calls, 'the title is "Labels"')
+    expect(('widget_set_tr_text', m.widgets['vs_label6'], 'Search Labels') in calls, 'the card\'s Search row says Search Labels')
+    m.click('btn_more')
+    expect(vis(m, 'vs_item6') == (1, 1) and vis(m, 'vs_item4') == (0, 0), 'the "..." card: Search Labels and Name, no Show group')
+    m.calls = []
+    m.click('vs_item6', count=40000000)
+    expect(('window_open', 'm1plus_search') in m.calls, 'Search Labels opens the Search page')
+    m = machine()
+    m.call(open_, a0=P.AR_LABELS, count=40000000)
+
+    # a tap: the label's albums, its name as the title, no Search, no Cover Flow
+    m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    expect(('window_open', 'm1plus_albums') in m.calls and not [c for c in m.calls if c[0] == 'loadAlbumList' and c[1] != O['CLASS_ALBUMS']],
+           'a tap on a label opens the Albums page on the library albums')
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Columbia') in m.calls, 'the title is the label')
+    vh = [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view]
+    pushed = [c[2] for c in m.calls if c[0] == '_deque_push_back']
+    expect([m.read_cstr(m.word(r + O['REC_ALBUM'])) for r in pushed] == ['Bitches Brew', 'Kind of Blue'] and vh and vh[-1] == O['SG_TITLE_H'] + 2 * O['SG_HDR_H'] + 2 * ROWH,
+           f'the label\'s two albums, in the library order, Jazz Hits (no label) and Pastel Blues (Philips) left out, under their B and K headers ({vh[-1:]}, {O['SG_TITLE_H']}, {O['SG_HDR_H']}, {ROWH})')
+    expect(m.props.get((m.widgets['btn_coverflow'], 'visible')) == 0 and m.props.get((m.widgets['btn_coverflow'], 'sensitive')) == 0,
+           'no Cover Flow button (hidden and insensitive)')
+    m.click('btn_more')
+    expect(vis(m, 'vs_item6') == (0, 0) and vis(m, 'vs_item1') == (1, 1), 'the "..." card has no Search row (hidden and insensitive); the Artist order stays')
+    m.call(PSYMS['m1_on_back'], count=200000)
+    # the second row (Kind of Blue) opens library row 2 (getAllAlbum: Bitches Brew 0, Jazz Hits 1, Kind of Blue 2, Pastel Blues 3)
+    y = SCREEN_Y0 + O['SG_TITLE_H'] + 2 * O['SG_HDR_H'] + ROWH + 10   # (the window's top, the title block, the two headers, the first row)
+    m.calls = []
+    m.touch('down', 100, y, 1000, fn='al_on_down'); calls = list(m.calls)
+    m.touch('up', 100, y, 1080, fn='al_on_up', count=40000000); m.calls = calls + m.calls
+    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_ALBUMS'], 2) in m.calls,
+           f'a tap on Kind of Blue opens library album row 2 ({[c for c in m.calls if c[0].startswith("navigator")]})')
+    m.call(PSYMS['al_on_destroy'], count=2000000)
+    m.call(PSYMS['ar_on_destroy'], count=2000000)
+
+    # the label's folder (/mnt/mmc/Labels/<label>, any case): its logo and about text under the title, the rows below them
+    LD = '/mnt/mmc/Labels'
+    def with_folder(logo=True, folder=True, about=b'Founded  in 1887.\nHome of Miles Davis, Bob Dylan and many more artists of every kind.'):
+        mm = machine()
+        mm.listing[LD] = [('.', 4), ('COLUMBIA', 4), ('Philips', 8)]
+        if folder: mm.listing[LD + '/COLUMBIA'] = [('About.TXT', 8)] + ([('logo.png', 8)] if logo else [])
+        if about is not None: mm.fs[LD + '/COLUMBIA/About.TXT'] = about
+        mm.images['file://' + LD + '/COLUMBIA/logo.png'] = (4, 2, bytes([200, 0, 0, 255]) * 8)
+        mm.call(open_, a0=P.AR_LABELS, count=40000000)
+        mm.calls = []
+        mm.call(PSYMS['ar_open'], a0=0, count=40000000)
+        return mm
+    def paint(mm, off):
+        mm.canvas = mm.alloc(0x80); mm.oy_canvas = mm.canvas
+        ev = mm.paint_event()
+        mm.setword(mm.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
+        mm.texts.clear(); mm.blits.clear()
+        mm.setword(mm.sv + SC_YOFF, off)
+        mm.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
+        return list(mm.blits), list(mm.texts)
+    LOGO, PITCH, GAP = O['AL_LB_LOGO'], O['AL_LB_PITCH'], O['AL_LB_GAP']
+    m = with_folder()
+    base = O['SG_TITLE_H'] + 2 * O['SG_HDR_H'] + 2 * ROWH
+    vh = [c[3] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.view]
+    blits, texts = paint(m, 0)
+    logo = [b for b in blits if tuple(b[2]) == (O['SG_TITLE_X'], O['SG_TITLE_H'], LOGO, LOGO)]
+    about = [(t, r) for t, r in texts if r[0] == O['SG_TITLE_X'] and r[2] == O['SG_TITLE_W'] and r[1] >= O['SG_TITLE_H'] + LOGO]
+    joined = ' '.join(t.strip() for t, r in about)
+    expect(logo and 'file://' + LD + '/COLUMBIA/logo.png' in m.loads, f'the logo, found in any case, fitted at the title\'s left under it ({blits[:3]})')
+    expect(about and joined.startswith('Founded in 1887. Home of Miles Davis') and about[0][1][1] == O['SG_TITLE_H'] + LOGO + GAP
+           and all(b[1][1] - a[1][1] == PITCH for a, b in zip(about, about[1:])),
+           f'the about text under the logo (the harness measures no width: one line), its newline and double space one space ({about})')
+    expect(vh and vh[-1] == base + LOGO + GAP + len(about) * PITCH + GAP, f'the rows move down by the logo and the text ({vh[-1:]}, {base})')
+    blits, texts = paint(m, O['SG_TITLE_H'] + 40)
+    expect(any(tuple(b[1]) == (0, 40, LOGO, LOGO - 40) for b in blits) and not [t for t, r in texts if r[1] < 0], 'scrolled: the logo cut at the top, no text line drawn above the window')
+    m.call(PSYMS['al_on_destroy'], count=2000000)
+    expect(any(c[0] == 'bitmap_destroy' for c in m.calls), 'closing frees the logo')
+    m.call(PSYMS['ar_on_destroy'], count=2000000)
+    for what, kw, h in (('no logo', dict(logo=False), None), ('no folder', dict(folder=False), 0)):
+        mm = with_folder(**kw)
+        vh = [c[3] for c in mm.calls if c[0] == 'widget_resize' and c[1] == mm.view]
+        blits, texts = paint(mm, 0)
+        if h is None:
+            n = len([t for t, r in texts if r[0] == O['SG_TITLE_X'] and r[2] == O['SG_TITLE_W'] and r[1] >= O['SG_TITLE_H']])
+            expect(n == 1 and vh[-1] == base + n * PITCH + GAP and not [b for b in blits if tuple(b[2][2:]) == (LOGO, LOGO)],
+                   f'no logo: the text right under the title ({n}, {vh[-1:]})')
+        else:
+            expect(vh[-1] == base and not [b for b in blits if tuple(b[2][2:]) == (LOGO, LOGO)], 'no folder: the page as before')
+
+    # a label of no library album: the page says No albums
+    m = machine()
+    m.call(open_, a0=P.AR_LABELS, count=40000000)
+    m.calls = []
+    m.call(PSYMS['ar_open'], a0=1, count=40000000)
+    expect(('window_open', 'm1plus_albums') in m.calls and ('widget_set_text_utf8', m.widgets['label_title'], 'ECM') in m.calls
+           and any(c[0] == 'widget_set_tr_text' and c[2] == 'No albums' for c in m.calls), 'a label no library album has: the page says No albums')
+
+    # no table: No labels
+    m = machine(table=False)
+    m.call(open_, a0=P.AR_LABELS, count=40000000)
+    said = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['label_status']]
+    expect(said[-1:] == ['No labels'] and shown(m) == [], f'no labels read yet: the page says No labels ({said})')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests, reread_tests, find_photo_tests, split_tests, split_lookup_tests, label_page_tests]

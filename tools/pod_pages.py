@@ -22,6 +22,7 @@ HOME_UPDATE = 2      # systemset/updatemusic_page: Update Library
 HOME_FOLDER = 4
 HOME_GENRE = 7
 HOME_COMPOSER = 8
+AR_LABELS = 64   # ACT_ARTISTS's Labels page (patch/artists.h AR_LABELS: the record labels, docs/modules/labels.md); no stock Home tile has this number
 HOME_HIRES = 9
 HOME_FAV = 10
 HOME_MOST = 11
@@ -193,6 +194,8 @@ ACT_NETTRANS = 168     # link row (Network Services): Wi-Fi Transfer, our page (
 ACT_SLEEPSET = 170    # picker row (the Sleep Timer page, opened by Now Playing's More sheet and the Control Center tile): choose the time (arg = an index of SLEEP_VALUES, 0 off; stock's sleepflag byte and sleep_time word; patch/sleeptimer.c st_set)
 ACT_SLEEPLEFT = 171   # information row (the Sleep Timer page, a card of its own under the choices, shown only while a timer runs): Time Left, H:MM rounded up to the minute (patch/sleeptimer.c st_left_text); no chevron, no touch
 ACT_BATTHIST = 188     # switch row (Battery History page): Battery History, off by default; records the last 24 hours of battery level and use (patch/batthist.c bh_toggle, /mnt/data/m1plus/battery-history)
+ACT_SCHEME = 191      # value row (Settings > Appearance > Scheme): the scheme's name; opens its picker page (arg = the page index); the payload shows the saved scheme (patch/palette.c pal_scheme)
+ACT_SCHEMESET = 192   # picker row (Scheme): choose the scheme (arg = its index in SCHEME_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_scheme_set)
 ACT_BHPAGE = 190      # value row (Settings > Battery): Battery History, On or Off as the switch on its page; opens the Battery History page (arg = its page index; patch/batthist.c bh_setting)
 ACT_BTCODECSET = 184  # picker row (the Audio Codec page of the Bluetooth page): choose the preferred codec (arg = stock's btcoding 0 .. 7; patch/btpage.c bp_codec_set: the init guard, stock's confirm while a device is connected, then stock's Quality choice)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
@@ -200,10 +203,10 @@ assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mir
 SWITCH_ACTIONS = (ACT_ASPLIT,) + ASSEP_ACTIONS + (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO, ACT_GAPLESS, ACT_FOLDERSKIP, ACT_DIGITAL, ACT_FOLDERCOVER, ACT_BOOTMEM, ACT_MONO, ACT_BATTHIST)
 SWITCH_ACTIONS += (ACT_ROTATE, ACT_CARMODE, ACT_NETAIR, ACT_NETDLNA)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_ASPAGE, ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_BHPAGE, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_SCROBPAGE, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE, ACT_RGBROW, ACT_XFEED)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_PCDIRSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_RGBTHEME, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET, ACT_XFEEDSET, ACT_SLEEPSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_ASPAGE, ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_SCHEME, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_BHPAGE, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_SCROBPAGE, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE, ACT_RGBROW, ACT_XFEED)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_PCDIRSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_SCHEMESET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_RGBTHEME, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET, ACT_XFEEDSET, ACT_SLEEPSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_ASPAGE: 'Off', ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_BHPAGE: 'Off', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_SCROBPAGE: 'Off', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0', ACT_RGBROW: 'Reference', ACT_XFEED: 'Off'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_ASPAGE: 'Off', ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_SCHEME: 'Classic', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_BHPAGE: 'Off', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_SCROBPAGE: 'Off', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0', ACT_RGBROW: 'Reference', ACT_XFEED: 'Off'}   # what the asset's value label says before the payload sets it
 VALUE_ACTIONS += (ACT_LANG,)
 CHECK_ACTIONS += (ACT_LANGSET, ACT_BTCODECSET)
 VALUE_INIT[ACT_LANG] = ''   # the language's own name: the payload sets it as the page opens
@@ -370,6 +373,7 @@ PAGE_ORDER = [   # every page, in the order of its number: this table alone deci
     'm1plus_relnotes',
     'm1plus_background',
     'm1plus_accent',
+    'm1plus_scheme',
     'm1plus_appearance',
     'm1plus_pulldown',
     'm1plus_radio',
@@ -510,6 +514,7 @@ VINYL_WHITE_INDEX = page_index('m1plus_vinyl_white')
 VTHEME_PAGE_INDEX = page_index('m1plus_vinyltheme')
 BG_PAGE_INDEX = page_index('m1plus_background')
 ACCENT_PAGE_INDEX = page_index('m1plus_accent')
+SCHEME_PAGE_INDEX = page_index('m1plus_scheme')
 APPEARANCE_PAGE_INDEX = page_index('m1plus_appearance')
 GENERAL_PAGE_INDEX = page_index('m1plus_general')
 NETSERVICE_PAGE_INDEX = page_index('m1plus_netservice')
@@ -603,6 +608,8 @@ ITEMS = [   # item id = index; the default order, essentials first (iPod classic
     Row('Subsonic', ACT_SUBSONIC),
     # Audiobooks (docs/modules/audiobooks.md): the books in /mnt/mmc/Audiobooks and their parts; an item like the rest, hidden from the menu by default (on Extras, in Library, after Podcasts).
     Row('Audiobooks', ACT_BOOKS),
+    # Labels (docs/modules/labels.md): the record labels the files' tags name, and a label's albums; an item like the rest, hidden from the menu by default (on Extras, in Library, after Composers).
+    Row('Labels', ACT_ARTISTS, AR_LABELS),
 ]
 SETTINGS_ID = 18
 assert ITEMS[SETTINGS_ID].label == 'Settings'
@@ -611,17 +618,17 @@ assert ITEMS[SETTINGS_ID].label == 'Settings'
 # comes from DEFAULT_MENU and EXTRAS_GROUPS, not from the id.
 ITEM_IDS = ('Now Playing', 'Cover Flow', 'Albums', 'Artists', 'Songs', 'Playlists', 'Shuffle', 'Genres', 'Folders',
             'Favorites', 'Recently Added', 'Recently Played', 'Most Played', 'Composers', 'Hi-Res', 'Update Library',
-            'Tidal', 'CD Ripper', 'Settings', 'Pod', 'Podcasts', 'Search', 'Radio', 'Subsonic', 'Audiobooks')
+            'Tidal', 'CD Ripper', 'Settings', 'Pod', 'Podcasts', 'Search', 'Radio', 'Subsonic', 'Audiobooks', 'Labels')
 assert tuple(r.label for r in ITEMS[:len(ITEM_IDS)]) == ITEM_IDS, 'menu item ids are frozen: append new items, never insert or reorder'
 DEFAULT_MENU = [1, 2, 3, 4, 5]   # the items shown by default, in order (saved string "12345"): Cover Flow, Albums, Artists, Songs, Playlists, then Extras. A minimal menu: Now Playing is not
                                     # among them (the mini player bar of the Home instance opens it, docs/modules/minibar.md), nor are Shuffle and Settings; every other item is on the Extras page,
                                     # grouped (EXTRAS_GROUPS), and Settings > Main Menu can show any of them
 assert all(0 <= i < len(ITEMS) for i in DEFAULT_MENU) and len(set(DEFAULT_MENU)) == len(DEFAULT_MENU)
-ID_CHARS = '012345678abcdefghijklmnop'   # one saved-list character per menu item
+ID_CHARS = '012345678abcdefghijklmnopq'   # one saved-list character per menu item
 assert len(ID_CHARS) == len(ITEMS)
 OFF_CHAR = '-'           # the saved list's separator: the item characters after it are turned off (not listed on the Extras page); at most once
 DEFAULT_OFF = []         # no item is turned off by default
-MENU_FILE_MAX = 28       # 25 item characters, optional off separator, newline and NUL
+MENU_FILE_MAX = 29       # 26 item characters, optional off separator, newline and NUL
 MENU = Page('m1plus_menu', 'm1plus_menu_page', 'M1+ Music', rows=ITEMS + [
     Row('Extras', ACT_PAGE, EXTRAS_PAGE_INDEX),   # always shown, always last
 ])
@@ -735,7 +742,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/homecover.md "Cache page"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 56  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 57  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 INFO_APHOTOS, INFO_ANONE = INFO_DUR + 1, INFO_DUR + 2   # patch/m1plus.c: the Artist Photos card's counts (homecover_stat 7, 8)
 INFO_LBACCT = INFO_DUR + 3   # patch/m1plus.c: the ListenBrainz page's Account row (patch/scrobpage.c lb_account_text)
 INFO_LFACCT = INFO_DUR + 4   # ... and the Last.fm page's
@@ -766,7 +773,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'nowplaying-lyrics-size', 'pod-appearance',
-                 'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
+                 'appearance-scheme', 'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
                  'battery-percentage', 'battery-charge-limit', 'battery-history', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'scrobbling', 'scrobble-auto', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'artists-rebuild', 'wifi-networks', 'podcast-directory', 'led-dynamic', 'playback-mono', 'playback-crossfeed', 'library-artist-split')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
@@ -777,7 +784,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 54      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 55      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = page_index('m1plus_files')
@@ -861,7 +868,7 @@ def format_pulldown(shown):
 # views, the song collections, the streaming services, the tools. Settings is in none: it is the Extras page's navbar button.
 EXTRAS_GROUPS = (
     ('Play', ('Now Playing', 'Shuffle', 'Pod')),
-    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Folders', 'Podcasts', 'Audiobooks', 'Radio', 'Search')),
+    ('Library', ('Albums', 'Artists', 'Songs', 'Playlists', 'Cover Flow', 'Genres', 'Composers', 'Labels', 'Folders', 'Podcasts', 'Audiobooks', 'Radio', 'Search')),
     ('Collections', ('Favorites', 'Recently Played', 'Recently Added', 'Most Played', 'Hi-Res')),
     ('Streaming', ('Subsonic', 'Tidal')),
     ('Tools', ('Update Library', 'CD Ripper')),
@@ -1051,6 +1058,11 @@ BG_VALUES = ('Black', 'Tinted')   # the value the Background row shows for the s
 ACCENT_VALUES = ('Neutral', 'Red', 'Orange', 'Green', 'Teal', 'Purple', 'Champagne')
 ACCENT_PAGE = Page('m1plus_accent', 'm1plus_accent_page', 'Accent', layout=[Row(n, ACT_ACCENTSET, i) for i, n in enumerate(ACCENT_VALUES)])
 
+# Settings > Appearance > Scheme (docs/modules/accent.md): the picker, one row per scheme in the saved order (tools/palette.py SCHEMES) with its two-colour swatch (the image pod_sw_s<arg>, tools/mod_icons.py; Classic has none)
+# and a check on the chosen one. The choice applies at once (patch/palette.c pal_scheme_set).
+SCHEME_VALUES = ('Classic', 'Navy & Coral', 'Teal & Sunflower', 'Federal Blue & Fluoro Orange', 'Green & Bright Red', 'Purple & Yellow', 'Burgundy & Mint', 'Black & Fluoro Pink', 'Greyscale')
+SCHEME_PAGE = Page('m1plus_scheme', 'm1plus_scheme_page', 'Scheme', layout=[Row(n, ACT_SCHEMESET, i) for i, n in enumerate(SCHEME_VALUES)])
+
 # Settings > Appearance > Lock Screen (patch/lockscreen.c, docs/modules/lockscreen.md): it replaces stock's systemset/screensaver_page (the Display page's Lock Screen row opens this page, tools/pod.py LOCKROW).
 # Four cards: Enable (stock's lock screen switch); Wallpaper (our picker) and Show Time (stock's clock switch; our own short label, as the page already says Lock Screen); Player Style (a value row, its picker); and
 # the Custom Wallpaper instructions (LOCKINFO_PAGE).
@@ -1076,9 +1088,9 @@ LOCKWALL_PAGE = Page('m1plus_lockwall', 'm1plus_lockwall_page', 'Wallpaper', kin
 # The Custom Wallpaper instructions: a Release Notes page (the same asset, tools/pod_ui.py build_relnotes_page, and painter, patch/relnotes.c lockinfo_open): the heading "Add Your Own Pictures" and three paragraphs.
 LOCKINFO_PAGE = Page('m1plus_lockinfo', 'm1plus_lockinfo_page', 'Custom Wallpaper', kind='relnotes')
 
-# Settings > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card
-# with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
-APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
+# Settings > Appearance: the Scheme value row (the scheme's name) in a card of its own; then a card with the Background value row (Black or Tinted) and the Accent value row (the accent's name),
+# each opening its picker, both hidden while a scheme other than Classic is chosen (patch/m1plus.c); then a card with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
+APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Scheme', ACT_SCHEME, SCHEME_PAGE_INDEX), GAP, Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
                                                                                          GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
 
 # Settings > Battery (patch/charging.c, docs/modules/charging.md): the Charge Limit value row and its note; the picker lists the limits, a check on the chosen one

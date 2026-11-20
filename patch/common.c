@@ -515,7 +515,8 @@ __attribute__((noinline)) int m1_tone_get(unsigned key, unsigned *tone) {
 
 __attribute__((noinline)) void m1_tone_put(unsigned key, unsigned tone) {
     unsigned i, at = 0;
-    if (!key) return;
+    if (!key || pal_scheme_on() == SCHEME_GREY)
+        return; /* (under Greyscale a cover decodes grey: its tone is not the album's, and would stay after Greyscale) */
     for (i = 0; i < TONE_CACHE_N; ++i) {
         if (tone_tab[i].key == key) {
             at = i;

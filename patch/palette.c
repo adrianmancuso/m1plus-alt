@@ -31,17 +31,20 @@
 static struct {
     int read; /* the setting has been read */
     int mode; /* the saved background: 0 Black, 1 Tinted, 2 Light, 3 Light Auto */
-    int day; /* Light Auto: the clock says light */
-    int on; /* the answer pal_light gives */
-    int tint_on; /* effective Tinted: the setting is Tinted, an accent is chosen, and no kill switch */
+    int day; /* Light Auto or a riso scheme: the clock says light */
+    int scheme; /* the saved scheme, 0 Classic .. SCHEME_GREY */
+    unsigned lo,
+        hi; /* while the remap is on, its ends as color_t words: black goes to lo, white to hi (Light: LIGHT_PAPER, LIGHT_INK) */
     int acc; /* the saved accent, 0 .. ACC_COUNT - 1 */
-    int acc_on; /* the answer pal_accent gives: the saved accent, or 0 under the kill switch or the bad-boot note */
+    unsigned key; /* the effective state, packed (pal_refresh; 0, the zeroed state: all off): PK_ON .. PK_SCH */
+    unsigned accw; /* while PK_ACC, the effective accent's word (pal_accent_color(PK_ACC)) */
     unsigned timer;
     int depth; /* style hook nesting */
     void *top; /* the window manager's top main window and its name when pal_exempt last looked, and what it found */
     const char *name;
     int exempt;
     int cover; /* the cover-tinted page the top window is: PAL_COVER_* (0 none) */
+    int regrey; /* the last change of the effective state turned Greyscale on or off (pal_regrey) */
 } pal __attribute__((section(".scratch")));
 
 static const char keep_names[] = LIGHT_KEEP;
@@ -100,7 +103,42 @@ static const unsigned acc_word[ACC_COUNT] = {
 static void pal_load(void);
 static int pal_cover_page(void);
 
-unsigned pal_accent_color(int index) { return index > 0 && index < ACC_COUNT ? acc_word[index] : ACC_NEUTRAL_WORD; }
+/* The riso schemes 1 .. SCHEME_GREY - 1 (offsets.inc SCHn_*): the day ink, the night paper, the accent, the glyph colour by day and by night. */
+enum { SCH_INK, SCH_NIGHT, SCH_ACC, SCH_GDAY, SCH_GNIGHT };
+#define SCH_WORDS(n) \
+    {RGBW(SCH##n##_INK), RGBW(SCH##n##_NIGHT), RGBW(SCH##n##_ACC), RGBW(SCH##n##_GDAY), RGBW(SCH##n##_GNIGHT)}
+static const unsigned sch_word[SCHEME_GREY - 1][5] = {SCH_WORDS(1), SCH_WORDS(2), SCH_WORDS(3), SCH_WORDS(4),
+                                                      SCH_WORDS(5), SCH_WORDS(6), SCH_WORDS(7)};
+/* The effective state, from pal.key: the remap is on (Light, or a riso scheme); it inverts (what pal_light answers: Light, or a riso scheme by day); Tinted (the setting is Tinted
+ * and an accent is chosen); the accent (what pal_accent answers); the scheme (Classic under the kill switch or the bad-boot note). Each is 0 under them. */
+#define PK_ON (pal.key & 1)
+#define PK_LIGHT (pal.key >> 1 & 1)
+#define PK_TINT (pal.key >> 2 & 1)
+#define PK_ACC (pal.key >> 3 & 31)
+#define PK_SCH (pal.key >> 8)
+#define PAL_RISO (PK_ON && PK_SCH) /* the effective scheme is a riso one (Greyscale is not on) */
+
+/* An accent (0 .. ACC_COUNT - 1), or a riso scheme's (PAL_SCHEME_ACC + scheme, what pal_accent answers under one). */
+unsigned pal_accent_color(int index) {
+    if (index > PAL_SCHEME_ACC && index < PAL_SCHEME_ACC + SCHEME_GREY)
+        return sch_word[index - PAL_SCHEME_ACC - 1][SCH_ACC];
+    return index > 0 && index < ACC_COUNT ? acc_word[index] : ACC_NEUTRAL_WORD;
+}
+
+/* One channel between the remap's ends: lo + v * (hi - lo) / 255, C's truncation (tools/palette.py mix_v). With lo LIGHT_PAPER and hi LIGHT_INK it is flip_v exactly. */
+static unsigned mix_v(unsigned v, unsigned lo, unsigned hi) {
+    return (unsigned)((int)lo + (int)v * ((int)hi - (int)lo) / 255);
+}
+
+/* The remap of a riso scheme (Light keeps light_flip, the same mapping): a neutral colour per channel between pal.lo and pal.hi, alpha kept; any other hue as it is. A riso scheme by day
+ * takes the secondary grey (SCHEME_SUB_FROM) as SCHEME_SUB first (tools/palette.py remap). */
+static unsigned pal_remap(unsigned c) {
+    unsigned out = c & 0xff000000u, s;
+    if (!light_is_neutral(c)) return c;
+    if (PK_LIGHT && (c & 0xffffffu) == SCHEME_SUB_FROM * 0x010101u) c = out | SCHEME_SUB * 0x010101u;
+    for (s = 0; s < 24; s += 8) out |= (mix_v(c >> s & 255, pal.lo >> s & 255, pal.hi >> s & 255) & 255) << s;
+    return out;
+}
 
 /* base with pct percent of acc, per channel byte, rounded (the alpha byte is whatever the caller keeps) */
 static unsigned pal_mix(unsigned base, unsigned acc, unsigned pct) {
@@ -127,7 +165,8 @@ static unsigned pal_wash(unsigned c, unsigned acc) {
     return (c & 0xff000000u) | (pal_mix(c, acc, ACC_WASH) & 0xffffffu);
 }
 
-/* A role colour (ROLE_*, compared without its alpha, which is kept) becomes the accent's: a pressed row the black page tinted, the progress fill the accent. 1 when c was one. */
+/* A role colour (ROLE_*, compared without its alpha, which is kept) becomes the accent's: a pressed row the black page tinted, the progress fill the accent. 1 when c was one.
+ * Under a riso scheme a pressed surface is its remapped rest colour tinted (cream by day). */
 static int pal_role(unsigned *c, unsigned acc) {
     unsigned rgb = (*c & 255) << 16 | (*c & 0xff00) | (*c >> 16 & 255), surface;
     if (rgb == ROLE_PROGRESS || rgb == ROLE_FILL) {
@@ -148,7 +187,10 @@ static int pal_role(unsigned *c, unsigned acc) {
     else
         return 0;
     *c = (*c & 0xff000000u) |
-         (pal_tint(pal.tint_on ? pal_mix(surface, acc, ACC_WASH) : surface, acc) &
+         (pal_tint(PAL_RISO  ? pal_remap(surface)
+                   : PK_TINT ? pal_mix(surface, acc, ACC_WASH)
+                             : surface,
+                   acc) &
           0xffffffu); /* the pressed surface: the rest colour tinted (Tinted: the tinted rest colour, tinted again) */
     return 1;
 }
@@ -159,25 +201,25 @@ static int pal_role(unsigned *c, unsigned acc) {
  * either way.
  */
 unsigned pal_map(unsigned c) {
-    unsigned acc = pal_accent_color(pal_accent());
-    if (acc != ACC_NEUTRAL_WORD && pal_role(&c, acc)) return c;
-    if (pal_light())
-        c = light_flip(c);
-    else if (pal.tint_on && acc != ACC_NEUTRAL_WORD && !pal_cover_page())
-        c = pal_wash(c, acc);
+    if (!pal.read) pal_load();
+    if (PK_ACC && pal_role(&c, pal.accw)) return c;
+    if (PK_ON)
+        c = PK_SCH ? pal_remap(c) : light_flip(c); /* (the remap is on only under Light or a riso scheme) */
+    else if (PK_TINT && !pal_cover_page()) /* (Tinted implies an accent) */
+        c = pal_wash(c, pal.accw);
     return c;
 }
 
-int pal_background(void) { return pal_light() ? PAL_LIGHT : pal.tint_on ? PAL_TINTED : PAL_BLACK; }
+int pal_background(void) { return pal_light() ? PAL_LIGHT : PK_TINT ? PAL_TINTED : PAL_BLACK; }
 
 int pal_accent(void) {
     if (!pal.read) pal_load();
-    return pal.acc_on;
+    return PK_ACC;
 }
 
 int pal_active(void) {
     if (!pal.read) pal_load();
-    return pal.on || pal.tint_on || pal.acc_on; /* (tint_on implies acc_on) */
+    return pal.key != 0; /* the remap, Tinted, an accent or a scheme (Greyscale: the image hook only) */
 }
 
 /* ---------------------------------------------------------------------------
@@ -205,19 +247,45 @@ static int pal_read_accent(void) {
     return c >= 0 && c < ACC_COUNT ? c : 0;
 }
 
-/* What the settings, the kill switch and the bad-boot note (an earlier boot failed: stock until re-enabled) say now: sets the effective background (pal.on) and accent (pal.acc_on),
- * and tells whether either changed. */
+/* The saved scheme: one digit 0 .. SCHEME_COUNT - 1 (set_read: "x" or "x\n"), else Classic. */
+static int pal_read_scheme(void) {
+    int c = set_read(SCHEME_FILE, '0') - '0';
+    return c >= 0 && c < SCHEME_COUNT ? c : 0;
+}
+
+/* What the settings, the kill switch and the bad-boot note (an earlier boot failed: stock until re-enabled) say now: sets the effective state (pal.key: the scheme, the remap, Tinted
+ * and the accent; the remap's ends and the accent's word with it), and tells whether it changed. A scheme other than Classic overrides the Background and Accent files: a riso scheme remaps by the clock with its
+ * own accent, Greyscale is Black + Neutral with the image hook on. */
 static int pal_refresh(void) {
-    int on = 0, acc = 0, tint = 0, changed;
+    unsigned key = 0, sch; /* on | light << 1 | tint_on << 2 | acc_on << 3 | sch << 8 (acc_on < 32) */
     if (!(home_off() || access(BAD_NOTE, F_OK) == 0)) {
-        if (pal.mode == 3) pal.day = pal_day();
-        on = pal.mode == 2 || (pal.mode == 3 && pal.day);
-        acc = pal.acc;
-        tint = pal.mode == 1 && acc; /* Tinted with no accent has no hue to tint with: Black */
+        sch = (unsigned)pal.scheme;
+        if (sch - 1 < SCHEME_GREY - 1) {
+            pal.day = pal_day();
+            key = 1 | (unsigned)pal.day << 1 | (PAL_SCHEME_ACC + sch) << 3 | sch << 8;
+        } else if (sch)
+            key = sch << 8; /* Greyscale: off but for the image hook */
+        else {
+            unsigned light;
+            if (pal.mode == 3) pal.day = pal_day();
+            light = pal.mode == 2 || (pal.mode == 3 && pal.day);
+            key = light | light << 1 | (unsigned)(pal.mode == 1 && pal.acc) << 2 |
+                  (unsigned)pal.acc << 3; /* Tinted with no accent has no hue to tint with: Black */
+        }
     }
-    changed = on != pal.on || acc != pal.acc_on || tint != pal.tint_on;
-    pal.on = on, pal.acc_on = acc, pal.tint_on = tint;
-    return changed;
+    if (key == pal.key) return 0;
+    pal.regrey = (pal.key >> 8 == SCHEME_GREY) != (key >> 8 == SCHEME_GREY);
+    pal.key = key;
+    sch = key >> 8;
+    if (key & 1 &&
+        sch) { /* a riso scheme: its accent; by day cream paper to the day ink (inverted, as Light), by night the dark paper to cream */
+        const unsigned *w = sch_word[sch - 1];
+        pal.accw = w[SCH_ACC];
+        pal.lo = key & 2 ? RGBW(SCHEME_PAPER) : w[SCH_NIGHT];
+        pal.hi = key & 2 ? w[SCH_INK] : RGBW(SCHEME_PAPER);
+    } else
+        pal.accw = acc_word[key >> 3 & 31], pal.lo = LIGHT_PAPER * 0x010101u, pal.hi = LIGHT_INK * 0x010101u;
+    return 1;
 }
 
 /* The effective mode changed: the cached images were flipped (or not) when they were decoded, so drop them, then repaint everything. */
@@ -234,12 +302,15 @@ static void pal_apply(void) {
 static int pal_tick(const void *timer) {
     (void)timer;
     if (pal_refresh()) pal_apply();
-    return pal.mode || pal.acc ? RET_REPEAT : RET_OK; /* RET_OK ends it: both settings went back to Off / Neutral */
+    return pal.mode | pal.acc | pal.scheme
+               ? RET_REPEAT
+               : RET_OK; /* RET_OK ends it: the settings went back to Off / Neutral / Classic */
 }
 
-/* Keep one timer while the background is not Black or the accent not Neutral (the clock, the kill switch and the bad-boot note are looked at each tick), none otherwise. */
+/* Keep one timer while the background is not Black, the accent not Neutral or the scheme not Classic (the clock, the kill switch and the bad-boot note are looked at each tick), none
+ * otherwise. */
 static void pal_arm(void) {
-    int want = pal.mode || pal.acc;
+    int want = pal.mode | pal.acc | pal.scheme;
     if (want && !pal.timer)
         pal.timer = timer_add(pal_tick, (void *)0, LIGHT_TICK_MS);
     else if (!want && pal.timer)
@@ -250,13 +321,37 @@ static void pal_load(void) {
     pal.read = 1;
     pal.mode = pal_read_mode();
     pal.acc = pal_read_accent();
+    pal.scheme = pal_read_scheme();
     pal_refresh();
     pal_arm();
 }
 
 int pal_light(void) {
     if (!pal.read) pal_load();
-    return pal.on;
+    return PK_LIGHT;
+}
+
+int pal_scheme(void) {
+    if (!pal.read) pal_load();
+    return pal.scheme;
+}
+
+int pal_scheme_on(void) {
+    if (!pal.read) pal_load();
+    return PK_SCH;
+}
+
+int pal_regrey(void) { return pal.regrey; }
+
+/* The scheme setting: saved atomically first (a failed save changes nothing), then applied at once, as the accent. */
+int pal_scheme_set(int s) {
+    if (s < 0 || s >= SCHEME_COUNT) return -1;
+    if (!pal.read) pal_load();
+    if (home_set_digit(SCHEME_FILE, SCHEME_TMP, s, SCHEME_COUNT - 1) < 0) return -1;
+    pal.scheme = s;
+    if (pal_refresh()) pal_apply();
+    pal_arm();
+    return s;
 }
 
 int pal_bg_mode(void) {
@@ -305,7 +400,15 @@ unsigned pal_not_role(unsigned c) {
     return c;
 }
 
-unsigned pal_tone(unsigned tone) { return pal_light() ? NP_NEUTRAL : pal_not_role(tone); }
+/* Rec. 601 luma of a colour's r, g and b (tools/palette.py grey_pixel): (r * 299 + g * 587 + b * 114) / 1000. */
+static unsigned luma(unsigned r, unsigned g, unsigned b) { return (r * 299 + g * 587 + b * 114) / 1000; }
+
+unsigned pal_tone(unsigned tone) {
+    if (pal_light()) return NP_NEUTRAL;
+    if (PK_SCH == SCHEME_GREY) /* Greyscale: the tone's grey, as the greyed cover's */
+        tone = (tone & 0xff000000u) | luma(tone & 255, tone >> 8 & 255, tone >> 16 & 255) * 0x010101u;
+    return pal_not_role(tone);
+}
 
 /* ---------------------------------------------------------------------------
  * The style hooks.
@@ -371,8 +474,12 @@ static int pal_cover_page(void) {
     return 0;
 }
 
-/* What the style hooks do: the palette is active and the page in front is not exempt. */
-static int pal_styled(void) { return pal_active() && !pal_exempt(); }
+/* What the style hooks do: the palette is active, maps colours (not Greyscale, whose style colours are stock's) and the page in front is not exempt. */
+static int pal_styled(void) {
+    if (!pal.read) pal_load();
+    return (pal.key & 255) &&
+           !pal_exempt(); /* the remap, Tinted or an accent (not Greyscale alone: the image hook only) */
+}
 
 unsigned *m1plus_style_color(unsigned *color, void *style, const char *name, unsigned fallback) {
     ++pal.depth;
@@ -427,8 +534,10 @@ static int has_slash_colon(const char *s) { /* a cover by path or URL */
     return 0;
 }
 
-static unsigned flip_channel(unsigned v, unsigned a, int premul) {
-    return premul ? a ? flip_v(v * 255u / a) * a / 255 : 0 : flip_v(v);
+/* One channel i (0 r, 1 g, 2 b) of a pixel remapped between the ends (Light: flip_v). */
+static unsigned flip_channel(unsigned v, unsigned a, int premul, unsigned i) {
+    unsigned lo = pal.lo >> 8 * i & 255, hi = pal.hi >> 8 * i & 255;
+    return premul ? a ? mix_v(v * 255u / a, lo, hi) * a / 255 : 0 : mix_v(v, lo, hi);
 }
 
 /* A decoded image of the theme (a plain asset name: a '/' or ':' is a cover by path or URL, never changed) before the manager copies and caches it. LIGHT_KEEP names stay.
@@ -481,9 +590,9 @@ static void light_image(const char *name, void *bitmap) {
                 if ((r > g ? r > b ? r : b : g > b ? g : b) - (r < g ? r < b ? r : b : g < b ? g : b) > LIGHT_SPREAD)
                     continue;
             }
-            p[o[0]] = (unsigned char)flip_channel(p[o[0]], a, premul);
-            p[o[1]] = (unsigned char)flip_channel(p[o[1]], a, premul);
-            p[o[2]] = (unsigned char)flip_channel(p[o[2]], a, premul);
+            p[o[0]] = (unsigned char)flip_channel(p[o[0]], a, premul, 0);
+            p[o[1]] = (unsigned char)flip_channel(p[o[1]], a, premul, 1);
+            p[o[2]] = (unsigned char)flip_channel(p[o[2]], a, premul, 2);
         }
     bitmap_unlock_buffer(bitmap);
 }
@@ -498,11 +607,11 @@ static int in_names(const char *s, const char *list) {
 }
 
 /* The accent's tint of a decoded image (tools/palette.py accent_pixel is the model): kind 0 FILL (slider and progress fills, the check, the playing wave: a pixel as light as the fill or
- * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1C1C1E square stays, white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
- * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. */
-static void accent_image(int kind, void *bitmap, unsigned acc) {
+ * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1C1C1E square stays (a riso scheme: remapped), white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
+ * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. Out of line: an image it does not tint pays for none of its registers (the 3700 budget). */
+static __attribute__((noinline)) void accent_image(int kind, void *bitmap, unsigned acc) {
     static const unsigned char at[4][4] = BITMAP_RGBA_AT;
-    unsigned format, stride, y, x, i, a, v[3], t, card, w4, h4;
+    unsigned format, stride, y, x, i, a, v[3], t, card, top, w4, h4;
     int premul;
     unsigned char *px, *p;
     const unsigned char *o;
@@ -516,8 +625,15 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
     if (!px) return;
     o = at[format];
     card = kind == 6 ? RGBW(ACC_SHUF) : ACC_CARD_WORD; /* the surface that is pressed: the card, or the Shuffle disc */
-    card = pal_tint(pal.tint_on ? pal_mix(card, acc, ACC_WASH) : card,
-                    acc); /* (Tinted: the tinted surface, tinted again) */
+    card = pal_tint(PAL_RISO  ? pal_remap(card)
+                    : PK_TINT ? pal_mix(card, acc, ACC_WASH)
+                              : card,
+                    acc); /* (Tinted: the tinted surface, tinted again; a riso scheme: the remapped surface) */
+    top =
+        kind == 5
+            ? RGBW(ACC_TILE)
+            : 0xffffffffu; /* the fixed end: the Library tile's square (#1C1C1E), or the Shuffle disc's glyph (white); under a riso scheme remapped */
+    if (PAL_RISO) top = pal_remap(top);
     for (y = 0; y < h4; ++y)
         for (p = px + y * stride, x = 0; x < w4; ++x, p += 4) {
             a = p[o[3]];
@@ -536,8 +652,8 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                 t = v[0] <= ACC_SHUF_DOWN_R ? 0 : (v[0] - ACC_SHUF_DOWN_R) * 255 / (255 - ACC_SHUF_DOWN_R);
                 if (t > 255) t = 255;
                 for (i = 0; i < 3; ++i) {
-                    unsigned b = card >> (8 * i) & 255;
-                    v[i] = b + (255 - b) * t / 255;
+                    int b = (int)(card >> (8 * i) & 255), e = (int)(top >> (8 * i) & 255);
+                    v[i] = (unsigned)(b + (e - b) * (int)t / 255);
                 }
             } else if (kind == 0) {
                 if (v[0] >= ACC_FILL_R) {
@@ -561,8 +677,8 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                 t = v[0] <= lo ? 0 : (v[0] - lo) * 255 / (255 - lo);
                 if (t > 255) t = 255;
                 for (i = 0; i < 3; ++i) {
-                    int e = kind == 3 ? (int)lo : (int)(RGBW(ACC_TILE) >> (8 * i) & 255),
-                        c = (int)(acc >> (8 * i) & 255), dv = (c - e) * (int)t;
+                    int e = kind == 3 ? (int)lo : (int)(top >> (8 * i) & 255), c = (int)(acc >> (8 * i) & 255),
+                        dv = (c - e) * (int)t;
                     dv = dv >= 0 ? dv / 255 : -(-dv / 255);
                     v[i] = (unsigned)(e + dv);
                 }
@@ -615,13 +731,52 @@ static void tint_image(void *bitmap, unsigned acc) {
     bitmap_unlock_buffer(bitmap);
 }
 
-/* The palette's image rule: the accent's tint of the images it owns (tinted instead of flipped, whatever the background), else the background's (Light: light_image). */
+/* Greyscale's cover (tools/palette.py grey_pixel): every pixel its Rec. 601 luma, alpha kept. Luma is linear, so a premultiplied pixel greys as stored (its grey stays within its alpha). */
+static void grey_image(void *bitmap) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned format, stride, y, x, w4, h4, l;
+    unsigned char *px, *p;
+    const unsigned char *o;
+    format = *(unsigned short *)((char *)bitmap + BITMAP_FORMAT) - 1u;
+    w4 = *(unsigned *)bitmap, h4 = *(unsigned *)((char *)bitmap + 4);
+    if (format >= 4 || !w4 || !h4 || w4 > 4096 || h4 > 4096) return;
+    stride = bitmap_get_line_length(bitmap);
+    if (stride < w4 * 4) return;
+    px = bitmap_lock_buffer_for_write(bitmap);
+    if (!px) return;
+    o = at[format];
+    for (y = 0; y < h4; ++y)
+        for (p = px + y * stride, x = 0; x < w4; ++x, p += 4) {
+            l = luma(p[o[0]], p[o[1]], p[o[2]]);
+            p[o[0]] = p[o[1]] = p[o[2]] = (unsigned char)l;
+        }
+    bitmap_unlock_buffer(bitmap);
+}
+
+/* Greyscale's image rule: a cover (a '/' or ':' name) greys, except a lock screen wallpaper (/mnt/mmc/lockscreenimage/...: a picture, not a cover). Out of line, off
+ * the Classic path. */
+static __attribute__((noinline)) void grey_rule(const char *name, void *bitmap) {
+    static const char dir[] = "lockscreenimage/";
+    const char *s, *a, *b;
+    int cover = 0;
+    for (s = name; *s; ++s) {
+        cover |= *s == '/' ||
+                 *s == ':'; /* (has_slash_colon's test: a third caller would take it out of line on the Classic path) */
+        for (a = s, b = dir; *b && *a == *b; ++a, ++b) {
+        }
+        if (!*b) return;
+    }
+    if (cover) grey_image(bitmap);
+}
+
+/* The palette's image rule: the accent's tint of the images it owns (tinted instead of flipped, whatever the background; a riso scheme's row glyphs take its glyph colour), else the
+ * background's (Light or a riso scheme: light_image). Greyscale leaves the theme's images as they are and greys a cover (a '/' or ':' name; not a lock screen wallpaper). */
 static void pal_image(const char *name, void *bitmap) {
     int kind = -1;
     unsigned acc;
     if (!name || !*name || !bitmap) return;
-    acc = pal_accent_color(pal_accent());
-    if (acc != ACC_NEUTRAL_WORD) {
+    acc = pal.accw;
+    if (PK_ACC) {
         if (in_names(name, fill_names))
             kind = 0;
         else if (in_names(name, switch_names))
@@ -636,12 +791,19 @@ static void pal_image(const char *name, void *bitmap) {
             kind = 6;
         else if ((has_prefix(name, glyph_names) && !in_names(name, glyph_not)) || in_names(name, glyph_stock))
             kind = 4;
+    } else if (
+        pal.key ==
+        SCHEME_GREY
+            << 8) { /* Greyscale (no accent, no remap, no tint): only its covers; behind the accent's test, so an accent's path is as before */
+        grey_rule(name, bitmap);
+        return;
     }
     if (kind >= 0)
-        accent_image(kind, bitmap, acc);
-    else if (pal_light())
+        accent_image(kind, bitmap,
+                     kind == 4 && PAL_RISO ? sch_word[PK_SCH - 1][PK_LIGHT ? SCH_GDAY : SCH_GNIGHT] : acc);
+    else if (PK_ON)
         light_image(name, bitmap);
-    else if (pal.tint_on && has_prefix(name, surface_names) && !has_slash_colon(name))
+    else if (PK_TINT && has_prefix(name, surface_names) && !has_slash_colon(name))
         tint_image(bitmap, acc);
 }
 

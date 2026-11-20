@@ -31,6 +31,8 @@
 #define GENRES_SORT_TMP "/mnt/data/m1plus/genres-sort.tmp"
 #define COMPOSERS_SORT_FILE "/mnt/data/m1plus/composers-sort" /* and the Composers page */
 #define COMPOSERS_SORT_TMP "/mnt/data/m1plus/composers-sort.tmp"
+#define LABELS_SORT_FILE "/mnt/data/m1plus/labels-sort" /* and the Labels page */
+#define LABELS_SORT_TMP "/mnt/data/m1plus/labels-sort.tmp"
 #define SONGS_SORT_FILE \
     "/mnt/data/m1plus/songs-sort-rev" /* the Songs page's direction of its Title, File Name and Format orders (its Sort card): "a" Z-A; missing or anything else A-Z (patch/songs.c); the order itself is the stock sort_flag */
 #define SONGS_SORT_TMP "/mnt/data/m1plus/songs-sort-rev.tmp"
@@ -79,6 +81,9 @@
 #define ACCENT_FILE \
     "/mnt/data/m1plus/appearance-accent" /* the accent (patch/palette.c): one digit, the index 0 Neutral (default) .. 6 Champagne, with an optional newline; anything else or missing = Neutral */
 #define ACCENT_TMP "/mnt/data/m1plus/appearance-accent.tmp"
+#define SCHEME_FILE \
+    "/mnt/data/m1plus/appearance-scheme" /* the scheme (patch/palette.c): one digit, 0 Classic (default), 1 .. 7 the riso schemes, 8 Greyscale, with an optional newline; anything else or missing = Classic */
+#define SCHEME_TMP "/mnt/data/m1plus/appearance-scheme.tmp"
 #define AZRAIL_FILE \
     "/mnt/data/m1plus/appearance-index-rail" /* Index Rail (patch/azlist.c): "1" = the A-Z rail and its bubble on the A-Z lists, "0" = off, anything else or missing = on (the default) */
 #define AZRAIL_TMP "/mnt/data/m1plus/appearance-index-rail.tmp"

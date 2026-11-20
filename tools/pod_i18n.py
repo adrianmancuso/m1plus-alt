@@ -35,7 +35,6 @@ STOCK = {
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
     'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
-    'msg_addfavsuccess': 'Added To Fav',   # the picker's Favourites row after a successful add (stock Add button's Favourites path, @0x52822c)
     'msg_delsong': 'Delete Song?',             # its confirm dialog and the stock message boxes it shows
     'msg_delsongfailed': 'Failed To Delete Song',
     'msg_delsongsuccess': 'Song Deleted',
@@ -355,10 +354,16 @@ TEXT = dict([
        'Canción', 'Brano', 'เพลง', 'Utwór', 'Песня', 'Пісня'),
     _t('Playlist', '歌单', '歌單', 'プレイリスト', '플레이리스트', 'Playlist', 'Playlist',
        'Lista', 'Playlist', 'เพลย์ลิสต์', 'Playlista', 'Плейлист', 'Плейлист'),
+    _t('Label', '厂牌', '廠牌', 'レーベル', '레이블', 'Label', 'Label',
+       'Sello', 'Etichetta', 'ค่ายเพลง', 'Wytwórnia', 'Лейбл', 'Лейбл'),
     _t('No Results', '无结果', '無結果', '結果なし', '결과 없음', 'Aucun résultat', 'Keine Ergebnisse',
        'Sin resultados', 'Nessun risultato', 'ไม่พบผลลัพธ์', 'Brak wyników', 'Нет результатов', 'Немає результатів'),
     _t('No albums', '没有专辑', '沒有專輯', 'アルバムがありません', '앨범 없음', 'Aucun album', 'Keine Alben',
        'Sin álbumes', 'Nessun album', 'ไม่มีอัลบั้ม', 'Brak albumów', 'Нет альбомов', 'Немає альбомів'),
+    _t('Labels', '厂牌', '廠牌', 'レーベル', '레이블', 'Labels', 'Labels',
+       'Sellos', 'Etichette', 'ค่ายเพลง', 'Wytwórnie', 'Лейблы', 'Лейбли'),
+    _t('No labels', '没有厂牌', '沒有廠牌', 'レーベルがありません', '레이블 없음', 'Aucun label', 'Keine Labels',
+       'Sin sellos', 'Nessuna etichetta', 'ไม่มีค่ายเพลง', 'Brak wytwórni', 'Нет лейблов', 'Немає лейблів'),
     _t('No artists', '没有艺术家', '沒有藝術家', 'アーティストがありません', '아티스트 없음', 'Aucun artiste', 'Keine Künstler',
        'Sin artistas', 'Nessun artista', 'ไม่มีศิลปิน', 'Brak wykonawców', 'Нет исполнителей', 'Немає виконавців'),
     _t('Music', '音乐', '音樂', 'ミュージック', '음악', 'Musique', 'Musik',
@@ -396,6 +401,9 @@ TEXT = dict([
     # A native-speaker pass is wanted.
     _t('Measuring tracks', '正在测量曲目', '正在測量曲目', '曲の長さを測定中', '곡 길이 측정 중', 'Mesure des titres', 'Titeldauern werden gemessen', 'Midiendo pistas', 'Misura delle tracce',
        'กำลังวัดความยาวเพลง', 'Mierzenie utworów', 'Измерение треков', 'Вимірювання треків'),
+    # Record labels (patch/labels.c, patch/homecover.c): the Home line "Reading labels n/m" after the durations. A native-speaker pass is wanted.
+    _t('Reading labels', '正在读取厂牌', '正在讀取廠牌', 'レーベルを読み込み中', '레이블 읽는 중', 'Lecture des labels', 'Labels werden gelesen', 'Leyendo sellos', 'Lettura delle etichette',
+       'กำลังอ่านค่ายเพลง', 'Odczyt wytwórni', 'Чтение лейблов', 'Читання лейблів'),
     _t('Checking library…', '正在检查曲库…', '正在檢查曲庫…', 'ライブラリを確認中…', '라이브러리 확인 중…', 'Vérification de la bibliothèque…', 'Datenbank wird geprüft…',
        'Comprobando biblioteca…', 'Controllo libreria…', 'กำลังตรวจสอบคลัง…', 'Sprawdzanie biblioteki…', 'Проверка медиатеки…', 'Перевірка медіатеки…'),
     _t('Rebuilding covers…', '正在重建封面…', '正在重建封面…', 'カバーを再構築中…', '커버 다시 만드는 중…', 'Reconstruction des pochettes…', 'Cover werden neu erstellt…',
@@ -505,6 +513,14 @@ TEXT = dict([
        '%d canciones', '%d brani', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
     # The Playlists page (patch/playlists.c): the menu row that opens the stock Playlists page to delete (its multi-select button), and the
     # empty page's line. New / Import / Export playlist are the stock keys (STOCK).
+    # The Add to Playlist picker (patch/picker.c, docs/modules/picker.md): a recent playlist's row subtitle (" · N tracks" follows), and the messages that name the
+    # playlist or Favorites (nothing is added when every song is already there). Machine translations, unreviewed.
+    _t('Recent', '最近', '最近', '最近', '최근', 'Récent', 'Zuletzt',
+       'Reciente', 'Recente', 'ล่าสุด', 'Ostatnio', 'Недавний', 'Нещодавній'),
+    _t('Added to “%s”', '已添加到“%s”', '已加入「%s」', '“%s”に追加しました', '“%s”에 추가됨', 'Ajouté à « %s »', 'Zu „%s“ hinzugefügt',
+       'Añadido a “%s”', 'Aggiunto a “%s”', 'เพิ่มไปยัง “%s” แล้ว', 'Dodano do „%s”', 'Добавлено в «%s»', 'Додано до «%s»'),
+    _t('Already in “%s”', '已在“%s”中', '已在「%s」中', 'すでに“%s”にあります', '이미 “%s”에 있음', 'Déjà dans « %s »', 'Bereits in „%s“',
+       'Ya está en “%s”', 'Già in “%s”', 'มีอยู่ใน “%s” แล้ว', 'Już jest w „%s”', 'Уже в «%s»', 'Уже в «%s»'),
     _t('Delete Playlists', '删除歌单', '刪除歌單', 'プレイリストを削除', '재생 목록 삭제', 'Supprimer des playlists', 'Playlists löschen',
        'Eliminar listas', 'Elimina playlist', 'ลบเพลย์ลิสต์', 'Usuń playlisty', 'Удалить плейлисты', 'Видалити плейлисти'),
     _t('No playlists', '没有歌单', '沒有歌單', 'プレイリストがありません', '재생 목록 없음', 'Aucune playlist', 'Keine Playlists',
@@ -1497,6 +1513,28 @@ TEXT = dict([
        'Morado', 'Viola', 'ม่วง', 'Fioletowy', 'Фиолетовый', 'Фіолетовий'),
     _t('Champagne', '香槟色', '香檳色', 'シャンパン', '샴페인', 'Champagne', 'Champagner',
        'Champán', 'Champagne', 'แชมเปญ', 'Szampański', 'Шампань', 'Шампань'),
+    # Settings > Appearance > Scheme (patch/palette.c, docs/modules/accent.md): the row and its picker's title, then the nine schemes (the picker's rows and the row's value). The colour words are translated, "&" stays;
+    # the names of the Pantone-style inks ("Fluoro", "Federal Blue") follow the printers' usage where a language has one.
+    _t('Scheme', '配色', '配色', 'スキーム', '색상 구성', 'Palette', 'Schema',
+       'Esquema', 'Schema', 'ชุดสี', 'Schemat', 'Схема', 'Схема'),
+    _t('Classic', '经典', '經典', 'クラシック', '클래식', 'Classique', 'Klassisch',
+       'Clásico', 'Classico', 'คลาสสิก', 'Klasyczny', 'Классика', 'Класика'),
+    _t('Navy & Coral', '藏青 & 珊瑚', '藏青 & 珊瑚', 'ネイビー & コーラル', '네이비 & 코랄', 'Marine & Corail', 'Marine & Koralle',
+       'Marino & Coral', 'Blu navy & Corallo', 'กรมท่า & คอรัล', 'Granat & Koral', 'Тёмно-синий & Коралл', 'Темно-синій & Корал'),
+    _t('Teal & Sunflower', '青绿 & 向日葵', '青綠 & 向日葵', 'ティール & ひまわり', '틸 & 해바라기', 'Sarcelle & Tournesol', 'Türkis & Sonnenblume',
+       'Turquesa & Girasol', 'Turchese & Girasole', 'เขียวอมฟ้า & ทานตะวัน', 'Morski & Słonecznik', 'Бирюзовый & Подсолнух', 'Бірюзовий & Соняшник'),
+    _t('Federal Blue & Fluoro Orange', '联邦蓝 & 荧光橙', '聯邦藍 & 螢光橙', 'フェデラルブルー & 蛍光オレンジ', '페더럴 블루 & 형광 오렌지', 'Bleu fédéral & Orange fluo', 'Bundesblau & Neonorange',
+       'Azul federal & Naranja flúor', 'Blu federale & Arancio fluo', 'น้ำเงินเฟเดอรัล & ส้มสะท้อนแสง', 'Błękit federalny & Neonowy pomarańcz', 'Федеральный синий & Флуор. оранжевый', 'Федеральний синій & Флуор. помаранчевий'),
+    _t('Green & Bright Red', '绿色 & 亮红', '綠色 & 亮紅', 'グリーン & ブライトレッド', '그린 & 밝은 레드', 'Vert & Rouge vif', 'Grün & Leuchtrot',
+       'Verde & Rojo vivo', 'Verde & Rosso vivo', 'เขียว & แดงสด', 'Zielony & Jaskrawa czerwień', 'Зелёный & Ярко-красный', 'Зелений & Яскраво-червоний'),
+    _t('Purple & Yellow', '紫色 & 黄色', '紫色 & 黃色', 'パープル & イエロー', '퍼플 & 옐로', 'Violet & Jaune', 'Violett & Gelb',
+       'Morado & Amarillo', 'Viola & Giallo', 'ม่วง & เหลือง', 'Fiolet & Żółty', 'Фиолетовый & Жёлтый', 'Фіолетовий & Жовтий'),
+    _t('Burgundy & Mint', '酒红 & 薄荷', '酒紅 & 薄荷', 'バーガンディ & ミント', '버건디 & 민트', 'Bordeaux & Menthe', 'Burgunder & Mint',
+       'Burdeos & Menta', 'Bordeaux & Menta', 'เบอร์กันดี & มินต์', 'Burgund & Mięta', 'Бордовый & Мята', 'Бордовий & М\'ята'),
+    _t('Black & Fluoro Pink', '黑色 & 荧光粉', '黑色 & 螢光粉', 'ブラック & 蛍光ピンク', '블랙 & 형광 핑크', 'Noir & Rose fluo', 'Schwarz & Neonpink',
+       'Negro & Rosa flúor', 'Nero & Rosa fluo', 'ดำ & ชมพูสะท้อนแสง', 'Czarny & Neonowy róż', 'Чёрный & Флуор. розовый', 'Чорний & Флуор. рожевий'),
+    _t('Greyscale', '灰度', '灰階', 'グレースケール', '그레이스케일', 'Niveaux de gris', 'Graustufen',
+       'Escala de grises', 'Scala di grigi', 'โทนสีเทา', 'Skala szarości', 'Оттенки серого', 'Відтінки сірого'),
     # The Songs page (patch/songs.c): the select mode's navbar ("N Selected", the Select All text button) and its
     # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK). The Play pill's text, "Play", is below (the album, playlist and Daily Mix pages, and the Songs, Folders and artist pages' flat pills).
     _t('Select All', '全选', '全選', 'すべて選択', '모두 선택', 'Tout choisir', 'Alle wählen',
@@ -1567,6 +1605,8 @@ TEXT = dict([
        'Buscar canciones', 'Cerca brani', 'ค้นหาเพลง', 'Szukaj utworów', 'Поиск песен', 'Пошук пісень'),
     _t('Search Artists', '搜索歌手', '搜尋歌手', 'アーティストを検索', '아티스트 검색', 'Rechercher un artiste', 'Künstler durchsuchen',
        'Buscar artistas', 'Cerca artisti', 'ค้นหาศิลปิน', 'Szukaj wykonawców', 'Поиск исполнителей', 'Пошук виконавців'),
+    _t('Search Labels', '搜索厂牌', '搜尋廠牌', 'レーベルを検索', '레이블 검색', 'Rechercher un label', 'Labels durchsuchen',
+       'Buscar sellos', 'Cerca etichette', 'ค้นหาค่ายเพลง', 'Szukaj wytwórni', 'Поиск лейблов', 'Пошук лейблів'),
     _t('Name', '名称', '名稱', '名前', '이름', 'Nom', 'Name',
        'Nombre', 'Nome', 'ชื่อ', 'Nazwa', 'Имя', 'Назва'),
     _t('Search Stations', '搜索电台', '搜尋電台', '局を検索', '방송국 검색', 'Rechercher une station', 'Sender suchen',

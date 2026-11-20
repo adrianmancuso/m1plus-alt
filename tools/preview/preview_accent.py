@@ -43,16 +43,16 @@ def contrast(a, b):
 
 class Palette:
     """One background and one accent, as the hooks of patch/palette.c give them: the object preview_settings.draw_page takes. Everything goes through tools/palette.py (the model the C is tested against)."""
-    def __init__(self, bg, ac, cover=False):
-        self.bg, self.ac, self.cover = bg, ac, cover   # cover: a cover-tinted page is in front (the Tinted wash leaves its colours alone)
+    def __init__(self, bg, ac, cover=False, scheme='classic', day=True):
+        self.bg, self.ac, self.cover, self.scheme, self.day = bg, ac, cover, scheme, day   # scheme, day: a riso scheme and the device clock (preview_schemes.py); cover: a cover-tinted page is in front (the Tinted wash leaves its colours alone)
 
     def ink(self, c):
         """A colour (r, g, b) or (r, g, b, a) as the style hooks give it."""
         c = tuple(c)
-        return PM.map_colour(c + (255,) * (len(c) == 3), self.bg, self.ac, self.cover)[:len(c)]
+        return PM.map_colour(c + (255,) * (len(c) == 3), self.bg, self.ac, self.cover, self.scheme, self.day)[:len(c)]
 
     def image(self, side, name):
-        return PM.render_image(name, side.img(name), self.bg, self.ac)
+        return PM.render_image(name, side.img(name), self.bg, self.ac, self.scheme, self.day)
 
     @property
     def base(self):
@@ -96,7 +96,7 @@ def menu_screen(s, pal, pressed='Albums'):
                 d.rectangle((c.x, y + 51, W - 1, y + 51), fill=pal.ink((0x22, 0x22, 0x22)))
         s.text(im, lab.x, y + 26, s.clip(s.shown(lab), 21, lab.w), 21, pal.ink((255, 255, 255)))
     d.rectangle((0, 0, W - 1, NAV - 1), fill=pal.base)
-    s.text(im, 58, 25, 'M1+ Music', PI.title_px(s.tree))
+    s.text(im, 58, 25, 'M1+ Music', PI.title_px(s.tree), pal.ink((255, 255, 255)))
     return im
 
 

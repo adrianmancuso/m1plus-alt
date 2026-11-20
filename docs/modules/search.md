@@ -25,22 +25,22 @@ Window 320 x 450 (numbers in `patch/search.h`).
 - **X** (`btn_return`, x 270): a flat 36 px disc in the field's grey with a white x. Back, as the
   hardware Back key.
 - **Chips** (y 52, 34 high): each as wide as its text plus 14 px a side, 6 px apart, measured at
-  open. Five English chips are wider than the screen, so the row scrolls sideways (drag of 6 px; a
+  open. Six chips (Top Results, Artists, Albums, Songs, Playlists, Labels) are wider than the screen, so the row scrolls sideways (drag of 6 px; a
   tap selects). Selected chip: light grey pill with dark text. No accent colour.
 - **List** (y 90 down, under a `#2C2C2E` line): a stock `list_view` with one content view that
   paints the rows itself. With the keyboard up the content is padded by the pad's height.
 - **Rows** (60 px, no headers): 44 px thumbnail at x 12 (round for an artist, 4 px corners
   otherwise), title 21 px white and grey line 18 px `#AAAAAA` from x 68, chevron at x 288 on
-  artists, albums and playlists (none on songs), hairline x 68..310. Grey line: `Artist`,
-  `Album · <artist>`, `Song · <artist>`, `Playlist`.
+  artists, albums, playlists and labels (none on songs), hairline x 68..310. Grey line: `Artist`,
+  `Album · <artist>`, `Song · <artist>`, `Playlist`, `Label`.
 - **Empty state**: keyboard up, the recent searches or a blank list. `No Results` for a query with
   no match.
 
 **Thumbnails** use the cover cache, loaded lazily through the Albums grid's ring (`patch/grid.c`).
 
 - Album and song: the cache file of artist + album (`cc_album_key`); a song without one takes the
-  library album's (`cc_cover_key`). Artist: the first of their albums that has a cover. Playlist
-  or no file: the placeholder disc.
+  library album's (`cc_cover_key`). Artist: the first of their albums that has a cover. Playlist,
+  label or no file: the placeholder disc.
 - Texts are made on first paint. The cover key is resolved by the loader, never in a paint.
 - One cover is decoded per timer tick, never while a query waits and never while the list moves
   (`grid_moving`). A paint that finds a tile without its picture restarts the ended timer.
@@ -75,7 +75,8 @@ the page opens or the user types.
 3. One timer (`se_tick`, 40 ms, started on demand) counts down and applies the text 200 ms after the
    last keystroke. Between queries it loads one cover.
 4. The library is read once, by the first tick: artists (`0xf004`), albums (`cc_albums`),
-   playlists (`0xf00b`), copied; songs (`0xf001`) left in `*pdeq_showlist`, not copied. The songs
+   playlists (`0xf00b`), copied; labels (`lb_rows` over the record labels' table, acquired and
+   released around the copy; none without a table, [labels](labels.md)); songs (`0xf001`) left in `*pdeq_showlist`, not copied. The songs
    query is last and `g_class_type` is set back to `0xf001`, because the stock album page under
    this page re-runs its query when the class differs. Search never touches the cover-task list.
 5. Another page's query replaces `*pdeq_showlist`. `se_valid` is checked on return, on a song tap
@@ -102,7 +103,7 @@ cut at 160 code points.
 |---|---|
 | song | title (file name when none), artist, album |
 | album | album, artist |
-| artist, playlist | name |
+| artist, playlist, label | name |
 
 `Unknown Artist` and `Unknown Album` are never results.
 
@@ -134,8 +135,8 @@ query ranks above 周杰伦, and a library without Chinese costs nothing extra.
 ## Rows by chip
 
 - **Top Results** (30 rows): best quality first, then types in the order artists, albums,
-  playlists, songs, each in library order.
-- **A type chip** (Artists 100, Albums 100, Songs 200, Playlists 100): that type's matches, best
+  labels, playlists, songs, each in library order.
+- **A type chip** (Artists 100, Albums 100, Songs 200, Playlists 100, Labels 100): that type's matches, best
   quality first. Selecting a chip builds its rows from the matches already known (no query), resets
   the list to the top and scrolls the chip row so the chip shows.
 
@@ -144,6 +145,7 @@ query ranks above 周杰伦, and a library without Chinese costs nothing extra.
 | artist | `albums_open_artist(copy, row, CLASS_ARTISTS)`, as the Artists page's tap |
 | album | `cc_open_album(NULL, 0, stock row)`, our album page |
 | playlist | `songs_open_playlist(id, name)`; opened from a Songs page, `sg_stack` sets that page aside |
+| label | `albums_open_label(name)`, as the Labels page's tap |
 | song | the library in stock order as the queue (`loadSongList`, class `0xf001`), Now Playing at the song; a missing file toasts `Storage unavailable` |
 
 A tap is a press and lift within `SC_DRAG_PX` on the same row. Back returns to Search.
@@ -163,9 +165,9 @@ exists. The asset side is `keyboard_pad_widgets()`, shared by both pages under t
 
 ## Entry points
 
-- **`search_open_in(scope)`**: `SEARCH_ALL`, `_ARTISTS`, `_ALBUMS`, `_SONGS`, `_PLAYLISTS` (0..4,
-  the chip order); another value returns -1. A scoped page shows only that chip and matches only
-  that type; recent searches are shared. The Albums and Artists "..." cards use it.
+- **`search_open_in(scope)`**: `SEARCH_ALL`, `_ARTISTS`, `_ALBUMS`, `_SONGS`, `_PLAYLISTS`, `_LABELS`
+  (0..5, the chip order); another value returns -1. A scoped page shows only that chip and matches only
+  that type; recent searches are shared. The Albums, Artists and Labels "..." cards use it.
 - **Songs page**: `sg_on_search` calls `search_open()`; the stock page opens when it returns < 0.
   Other lists on that page search the whole library.
 - **Menu and Extras**: the Search item (ID 21, `ACT_SEARCH`; hidden by default, listed on Extras, movable to the Main Menu in Settings)
@@ -182,7 +184,7 @@ search; Navidrome: [subsonic](subsonic.md) "What the user sees") keep the page b
 - A spinner (`se_spin`, the shared `ls_spin` timer) shows while a request is out. An empty answer
   says `No Results`, offline (`SBA_NOWIFI`) "Connect to Wi-Fi first", a failure the source's line.
 - Taps: artist `albums_open_src`, album `album_open_src`, song `so_play_src` (an undownloaded DSD
-  track asks `ls_dsd_confirm`). No playlists results.
+  track asks `ls_dsd_confirm`). No playlists results. No Labels chip; `SEARCH_LABELS` returns -1.
 - Recent searches live in `<Navidrome cache>/search-history`, apart from the local file.
 
 ## Titles of another list

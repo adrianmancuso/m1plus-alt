@@ -19,16 +19,16 @@ SHOWLIST = pod.DATA['PDEQ_SHOWLIST'][0]
 SC_YOFF = O['SC_YOFF']
 LIST_Y0 = 30 + D['SE_LIST_Y']          # the list's top on the screen: the status bar and the page's own top bar
 ROW_H, LIST_H = D['SE_ROW_H'], D['SE_LIST_H']
-ARTIST, ALBUM, SONG, PLAYLIST = 0, 1, 2, 3
-CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS = range(5)
-CAPS = {ARTIST: D['SE_CAP_ARTISTS'], ALBUM: D['SE_CAP_ALBUMS'], SONG: D['SE_CAP_SONGS'], PLAYLIST: D['SE_CAP_PLAYLISTS']}
+ARTIST, ALBUM, SONG, PLAYLIST, LABEL = 0, 1, 2, 3, 4
+CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS, CH_LABELS = range(6)
+CAPS = {ARTIST: D['SE_CAP_ARTISTS'], ALBUM: D['SE_CAP_ALBUMS'], SONG: D['SE_CAP_SONGS'], PLAYLIST: D['SE_CAP_PLAYLISTS'], LABEL: D['SE_CAP_LABELS']}
 TICK_MS, DEBOUNCE = D['SE_TICK_MS'], D['SE_DEBOUNCE']
 RET_REPEAT = 8
 # struct se (patch/search.c), field by field: the offsets are worked out from the declaration, and checked against the payload's own state in `state()`
 _FIELDS = [('win', 4), ('view', 4), ('sv', 4), ('list', 4), ('status', 4), ('chips', 4), ('chl', 4), ('field', 4), ('st_title', 4), ('st_sub', 4), ('st_chip', 4), ('st_chip_on', 4),
            ('query', 64), ('typed', 64), ('q', 264), ('pq', 264), ('toff', 32), ('tlen', 32), ('nterms', 4), ('nq', 4), ('pn', 4), ('have_prev', 4), ('loaded', 4),
-           ('lists', 16), ('n', 16), ('cand', 16), ('sc', 16), ('nc', 16), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('lo', 4), ('hi', 4), ('chip_x', 24), ('chip_sx', 4), ('chip_down', 4),
-           ('chip_dx', 4), ('chip_sx0', 4), ('chip_drag', 4), ('chip_text', 480), ('chip_len', 20), ('press', 4), ('down', 4), ('down_x', 4), ('down_y', 4), ('pressing', 4),
+           ('lists', 20), ('n', 20), ('cand', 20), ('sc', 20), ('nc', 20), ('rows', 4), ('nrows', 4), ('chip', 4), ('content', 4), ('lo', 4), ('hi', 4), ('chip_x', 28), ('chip_sx', 4), ('chip_down', 4),
+           ('chip_dx', 4), ('chip_sx0', 4), ('chip_drag', 4), ('chip_text', 576), ('chip_len', 24), ('press', 4), ('down', 4), ('down_x', 4), ('down_y', 4), ('pressing', 4),
            ('wait', 4), ('timer', 4), ('chev', 4)]
 OFF, _o = {}, 0
 for _n, _s in _FIELDS: OFF[_n] = _o; _o += _s
@@ -416,10 +416,10 @@ def chips_tests(ctx):
     expect = ctx.expect
     m = opened([('Love', 'A', 'B')], ['Love'], [('Love', 'A')], playlists=['Love'])
     typed(m, 'love')
-    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
+    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(D['SE_CHIPS'])]
     lay = PS.chip_layout(widths)
-    xs = [state(m, 'chip_x', i) for i in range(6)]
-    expect([x for x, _ in lay] == xs[:5] and xs[5] - D['SE_CHIP_GAP'] == lay[-1][0] + lay[-1][1], f'the chips are placed from the texts\' widths in the chip font ({xs} against {lay})')
+    xs = [state(m, 'chip_x', i) for i in range(D['SE_CHIPS'] + 1)]
+    expect([x for x, _ in lay] == xs[:-1] and xs[-1] - D['SE_CHIP_GAP'] == lay[-1][0] + lay[-1][1], f'the chips are placed from the texts\' widths in the chip font ({xs} against {lay})')
     end = PS.chips_end(lay)
     expect(end > 320, f'the row is wider than the screen and scrolls ({end})')
     hl = m.widgets['se_chip_hl']
@@ -435,7 +435,7 @@ def chips_tests(ctx):
     chips_touch('down', x2); chips_touch('up', x2, 1080)
     expect(state(m, 'chip') == CH_ALBUMS and titles(m) == ['Love'] and all(k == ALBUM for k, _ in rows(m)), 'a tap on Albums selects it: its rows only')
     expect(geo()[0] == lay[2][0] - state(m, 'chip_sx') and geo()[2] == lay[2][1], 'the pill moves under it')
-    expect(state(m, 'chip') in range(5), 'exactly one chip is selected')
+    expect(state(m, 'chip') in range(D['SE_CHIPS']), 'exactly one chip is selected')
     chips_touch('down', 250); chips_touch('move', 250 - 8, 1030); chips_touch('move', 250 - 60, 1060); chips_touch('up', 250 - 60, 1090)
     sx = state(m, 'chip_sx')
     expect(sx == 60 and state(m, 'chip') == CH_ALBUMS, f'a drag of the row scrolls it and selects nothing ({sx})')
@@ -464,10 +464,10 @@ def scope_tests(ctx):
     lib = dict(songs=[('Love', 'A', 'B')], artists=['Love'], albums=[('Love', 'A')], playlists=['Love'])
     m = page_machine(**lib)
     expect(m.call(PSYMS['search_open_in'], a0=CH_ALBUMS, count=40000000) == 0 and ('window_open', 'm1plus_search') in m.calls, 'search_open_in(SEARCH_ALBUMS) opens the page')
-    expect(D['SE_CHIPS'] == 5 and state(m, 'chip') == CH_ALBUMS and (state(m, 'lo'), state(m, 'hi')) == (CH_ALBUMS, CH_ALBUMS + 1), 'it opens with Albums selected, the row holding that chip alone')
-    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(5)]
+    expect(D['SE_CHIPS'] == 6 and state(m, 'chip') == CH_ALBUMS and (state(m, 'lo'), state(m, 'hi')) == (CH_ALBUMS, CH_ALBUMS + 1), 'it opens with Albums selected, the row holding that chip alone')
+    widths = [width(PS.CHIPS[i], D['SE_CHIP_PX']) for i in range(D['SE_CHIPS'])]
     lay = PS.chip_layout(widths)
-    xs = [state(m, 'chip_x', i) for i in range(6)]
+    xs = [state(m, 'chip_x', i) for i in range(D['SE_CHIPS'] + 1)]
     expect(xs[CH_ALBUMS] == D['SE_CHIP_X'] and xs[CH_ALBUMS + 1] - D['SE_CHIP_GAP'] - xs[CH_ALBUMS] == lay[CH_ALBUMS][1], f'the one chip is at the row\'s first place, its own width ({xs})')
     hl = m.widgets['se_chip_hl']
     expect(tuple(m.props[(hl, k)] for k in 'xywh') == (D['SE_CHIP_X'], D['SE_CHIP_Y'], lay[CH_ALBUMS][1], D['SE_CHIP_H']), 'the pill is under it')
@@ -494,11 +494,11 @@ def scope_tests(ctx):
         expect(mm.call(PSYMS['search_open_in'], a0=scope, count=40000000) == 0, f'scope {scope} opens')
         typed(mm, 'love')
         expect(state(mm, 'chip') == scope and len(rows(mm)) == 1 and rows(mm)[0][0] == kind, f'scope {scope}: only that type\'s row ({rows(mm)})')
-    for bad in (-1, 5, 99):
+    for bad in (-1, 6, 99):
         mm = page_machine(**lib)
         expect(mm.call(PSYMS['search_open_in'], a0=bad & 0xffffffff, count=40000000) == 0xffffffff and ('window_open', 'm1plus_search') not in mm.calls, f'scope {bad} is refused: the caller opens the stock page')
     mm = page_machine(**lib)
-    expect(mm.call(PSYMS['search_open_in'], a0=0, count=40000000) == 0 and state(mm, 'chip') == CH_TOP and (state(mm, 'lo'), state(mm, 'hi')) == (0, 5), 'SEARCH_ALL is the full page, Top Results selected')
+    expect(mm.call(PSYMS['search_open_in'], a0=0, count=40000000) == 0 and state(mm, 'chip') == CH_TOP and (state(mm, 'lo'), state(mm, 'hi')) == (0, 6), 'SEARCH_ALL is the full page, Top Results selected')
     typed(mm, 'love')
     expect(sorted(k for k, _ in rows(mm)) == [ARTIST, ALBUM, SONG, PLAYLIST], 'and finds every type')
     mm = page_machine(**lib)
@@ -719,6 +719,54 @@ def split_tests(ctx):
         expect(('window_open', 'm1plus_albums') in m.calls, 'on: a tap on the split name opens the Albums page')
 
 
+def label_tests(ctx):
+    """Labels (patch/labels.h): the table's names are a kind of their own, matched on the name, listed after the albums in Top Results with the grey line "Label", under their
+    own chip; a tap opens the label's albums. No table: no label results. A source's page has no Labels chip, and cannot be opened scoped to it."""
+    expect = ctx.expect
+    LBF = '/mnt/mmc/.m1plus/labels'
+    table = sibling('artists').label_table([('/mnt/mmc/m/0.flac', 10, 1), ('/mnt/mmc/m/1.flac', 11, 2), ('/mnt/mmc/m/2.flac', 12, 3)], ['Blue Note', 'Columbia', 'ECM'])
+    def machine(with_table=True):
+        m = page_machine([('Blue Train', 'John Coltrane', 'Blue Train'), ('So What', 'Miles Davis', 'Kind of Blue'), ('Other', 'Ann', 'Own')], ['John Coltrane', 'Miles Davis'],
+                         [('Blue Train', 'John Coltrane'), ('Kind of Blue', 'Miles Davis')], cls=CopyMachine)
+        if with_table: m.fs[LBF] = table
+        for n in ('view_grid', 'albums_scrollview', 'label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'btn_coverflow', *VS_WIDGETS): m.widget(n)
+        m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+        return m
+    def label_titles(m):
+        lst = state(m, 'lists', LABEL) & 0xffffffff
+        return [m.read_cstr(m.word(m.deques[lst][i] + O['REC_TITLE'])) for k, i in rows(m) if k == LABEL]
+    m = machine()
+    assert m.call(PSYMS['search_open'], count=40000000) == 0
+    typed(m, 'blue')
+    kinds = [k for k, _ in rows(m)]
+    expect(label_titles(m) == ['Blue Note'], f'"blue" finds the label Blue Note ({label_titles(m)})')
+    expect(kinds == [ALBUM, LABEL, SONG, ALBUM, SONG], f'Top Results: within a quality the label after the albums, before the songs ({kinds})')
+    names = [t[0] for t in paint(m)[0]]
+    expect('Blue Note' in names and 'Label' in names, f'a label row: the name over "Label" ({names})')
+    chip(m, CH_LABELS)
+    expect([k for k, _ in rows(m)] == [LABEL], f'the Labels chip lists the labels only ({rows(m)})')
+    typed(m, 'col')
+    expect(label_titles(m) == ['Columbia'], f'"col": Columbia ({label_titles(m)})')
+    m.calls.clear()
+    tap(m, ROW_H // 2)
+    expect(('window_open', 'm1plus_albums') in m.calls, f'a tap opens the label\'s albums ({[c for c in m.calls if c[0] == "window_open"]})')
+    # no table: no label results
+    m = machine(with_table=False)
+    assert m.call(PSYMS['search_open'], count=40000000) == 0
+    typed(m, 'blue')
+    expect(LABEL not in [k for k, _ in rows(m)] and state(m, 'lists', LABEL) == 0, 'no table: no label results')
+    # scoped to labels
+    m = machine()
+    expect(m.call(PSYMS['search_open_in'], a0=D['SEARCH_LABELS'], count=40000000) == 0 and (state(m, 'lo'), state(m, 'hi')) == (CH_LABELS, CH_LABELS + 1),
+           'search_open_in(SEARCH_LABELS): the Labels chip alone')
+    typed(m, 'e')
+    expect({k for k, _ in rows(m)} == {LABEL} and sorted(label_titles(m)) == ['Blue Note', 'ECM'], f'only labels match ({rows(m)}, {label_titles(m)})')
+    # a source: no Labels chip, no labels scope
+    m = src_machine()
+    expect(m.call(PSYMS['search_open_src_in'], a0=m.fake_src, a1=D['SEARCH_LABELS'], count=40000000) & 0xffffffff == 0xffffffff, 'a source cannot be searched for labels')
+    expect(m.call(PSYMS['search_open_src'], a0=m.fake_src, count=40000000) == 0 and (state(m, 'lo'), state(m, 'hi')) == (CH_TOP, CH_LABELS), 'a source\'s page has no Labels chip')
+
+
 def perf_tests(ctx):
     """A big library: the first query (a full scan), an extending query, a shortening one, and the first tick that reads the library."""
     expect = ctx.expect
@@ -813,7 +861,7 @@ def entry_tests(ctx):
     # the menu's Search item (pod_pages.ACT_SEARCH): the same entry from the M1+ Music menu and the Extras page
     P = pod_pages
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Search')
-    expect(item == 21 == len(P.ITEMS) - 4 and P.ITEMS[item].action == P.ACT_SEARCH == 35 and P.ID_CHARS[item] == 'm' and item not in P.DEFAULT_MENU
+    expect(item == 21 == len(P.ITEMS) - 5 and P.ITEMS[item].action == P.ACT_SEARCH == 35 and P.ID_CHARS[item] == 'm' and item not in P.DEFAULT_MENU
            and P.EXTRAS_GROUPS[1][1][-1:] == ('Search',) and P.EXTRAS_GROUPS[3][1][0] == 'Subsonic' and P.parse_menu_full(b'123456m\n') == ([1, 2, 3, 4, 5, 6, 21], []) and P.format_menu([1, 2, 21]) == '12m\n'
            and pod_i18n.key_for('Search') == 'Search' and all(pod_i18n.TEXT['Search'][pod_i18n.table_for(loc)] for loc in pod_i18n.LOCALES)
            and os.path.isfile(os.path.join(mod_icons.PNG, 'pod_ic_search.png')) and mod_icons.POD_ROWS['Search'][0] == 'pod_ic_search',
@@ -1392,4 +1440,4 @@ def src_tests(ctx):
     expect(rows(m) == [] and said(m, 'label_status') == "Can't connect to the server", f"a failed request: the failure line ({said(m, 'label_status')})")
 
 
-SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, loader_tests, entry_tests, return_tests, embed_tests, asset_tests, src_tests, split_tests]   # tools/check.py runs each as its own task
+SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, loader_tests, entry_tests, return_tests, embed_tests, asset_tests, src_tests, split_tests, label_tests]   # tools/check.py runs each as its own task

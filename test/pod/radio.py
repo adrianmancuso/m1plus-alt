@@ -993,7 +993,7 @@ def asset_tests(ctx):
     expect(f('sg_rail') is not None and f('sg_rail').x == O['SG_RAIL_X'] and f('sg_bubble_letter') is not None and f('label_grid_title').get('style:normal:font_size') == '18' and f('label_grid_sub').get('style:normal:text_color') == '#AAAAAA'
            and f('label_hdr') is not None, "the countries' rail, its bubble and header style, and the Albums grid's two text styles are in the asset")
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Radio')
-    expect(item == 22 == len(P.ITEMS) - 3 and P.ITEMS[item].action == P.ACT_RADIO == 50 and P.ID_CHARS[item] == 'n' and item not in P.DEFAULT_MENU and P.EXTRAS_GROUPS[1][1][-3:] == ('Audiobooks', 'Radio', 'Search')
+    expect(item == 22 == len(P.ITEMS) - 4 and P.ITEMS[item].action == P.ACT_RADIO == 50 and P.ID_CHARS[item] == 'n' and item not in P.DEFAULT_MENU and P.EXTRAS_GROUPS[1][1][-3:] == ('Audiobooks', 'Radio', 'Search')
            and P.parse_menu_full(b'123456n\n') == ([1, 2, 3, 4, 5, 6, 22], []) and P.format_menu([1, 2, 22]) == '12n\n' and len(P.format_menu(list(range(10)), list(range(10, 18)) + [19, 20, 21, 22])) < P.MENU_FILE_MAX
            and 'radio-recent' in P.SETTING_FILES, 'Radio is item 22 (saved as "n"), hidden from the menu by default, in the Library group of Extras after Podcasts and Audiobooks, before Search')
     xx = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')

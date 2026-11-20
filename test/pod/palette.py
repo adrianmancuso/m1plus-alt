@@ -12,6 +12,8 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 
 BG_FILE = '/mnt/data/m1plus/appearance-background'
 ACCENT_FILE = '/mnt/data/m1plus/appearance-accent'
+SCHEME_FILE = '/mnt/data/m1plus/appearance-scheme'
+SCHEME_TMP = SCHEME_FILE + '.tmp'
 KILL_SD, KILL_FLASH, BAD = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off', '/mnt/data/m1plus-bad'
 WHITE, BLACK = 0xffffffff, 0xff000000
 PAPER, INK = L.PAPER * 0x010101 | 0xff000000, L.INK * 0x010101 | 0xff000000
@@ -31,10 +33,11 @@ class LM(Machine):
     """The payload with Light Mode's state: mode is the saved file's text (None: no file)."""
     keep_cache = False
 
-    def __init__(self, mode=None, kill=False, bad=False, hook=False, acc=None):
+    def __init__(self, mode=None, kill=False, bad=False, hook=False, acc=None, scheme=None):
         super().__init__()
         if mode is not None: self.fs[BG_FILE] = mode
         if acc is not None: self.fs[ACCENT_FILE] = acc
+        if scheme is not None: self.fs[SCHEME_FILE] = scheme
         if kill: self.present.add(KILL_SD)
         if bad: self.present.add(BAD)
         self.unloads = 0
@@ -520,8 +523,8 @@ def settings_tests(ctx):
     expect([(r.label, r.action, r.arg) for r in B.rows] == [('Black', P.ACT_BGSET, 0), ('Tinted', P.ACT_BGSET, 1)] and B.title == 'Background' and B.key == 'm1plus_background'
            and P.BG_VALUES == ('Black', 'Tinted') and all(P.row_kind(r) == 'check' for r in B.rows) and not [x for x in B.layout if isinstance(x, P.Note)],
            'the picker: Black and Tinted in the saved order, titled Background, a check each, no Light')
-    expect([(r.label, r.action, r.arg) for r in W.rows][:2] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value',
-           'the Appearance page: the Background value row above the Accent one (the Control Center link follows in its own card, test/pod/pdtiles.py)')
+    expect([(r.label, r.action, r.arg) for r in W.rows][1:3] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value',
+           'the Appearance page: the Background value row above the Accent one (Scheme above them, the Control Center link below in its own card, test/pod/pdtiles.py)')
 
     def open_pick(data=None, acc=None):
         m = LM(acc=acc)
@@ -550,12 +553,12 @@ def settings_tests(ctx):
     # the Appearance page shows the saved background and accent
     def values(data, acc):
         m = LM(acc=acc)
-        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(2)] + [f'pod_value{i}' for i in range(2)] + [f'pod_label{i}' for i in range(2)])}
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(3)] + [f'pod_value{i}' for i in range(3)] + [f'pod_label{i}' for i in range(3)])}
         if data is not None: m.fs[BG_FILE] = data
         row = m.alloc(12)
         m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
         m.call(PSYMS['on_row'], a0=row, count=6000000)
-        return [[c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{i}']] for i in range(2)]
+        return [[c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{i}']] for i in (1, 2)]
     expect([values(d, a) for d, a in ((None, None), (b'1\n', b'1\n'), (b'2\n', b'6\n'), (b'7', None))] == [[['Black'], ['Neutral']], [['Tinted'], ['Red']], [['Black'], ['Champagne']], [['Black'], ['Neutral']]],
            'the Appearance rows show the saved background and accent (Black for no, invalid or Light)')
     # the assets
@@ -564,8 +567,8 @@ def settings_tests(ctx):
     expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(2))
            and tree.find('label_title').get('tr_text') == 'Background', 'the picker asset: two rows without a glyph, a hidden insensitive check each')
     st = awtk_ui.parse(open(os.path.join(raw, 'm1plus_appearance.bin'), 'rb').read())
-    expect(st.find('pod_row0').find('pod_icon').get('image') == 'pod_ci_contrast' and st.find('pod_value0').get('tr_text') == 'Black' and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_palette'
-           and st.find('pod_value1').get('tr_text') == 'Neutral', 'the Appearance page asset: Background (contrast glyph, "Black") above Accent (palette glyph, "Neutral")')
+    expect(st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_contrast' and st.find('pod_value1').get('tr_text') == 'Black' and st.find('pod_row2').find('pod_icon').get('image') == 'pod_ci_palette'
+           and st.find('pod_value2').get('tr_text') == 'Neutral', 'the Appearance page asset: Background (contrast glyph, "Black") above Accent (palette glyph, "Neutral")')
 
 
 def rgba(rgb, a=255):
@@ -803,6 +806,83 @@ def accent_setting_tests(ctx):
     expect(('timer_remove', 0x777) in m.calls, 'and the accent Neutral then ends it')
 
 
+def scheme_picker_tests(ctx):
+    """The Scheme picker (Settings > Appearance > Scheme, m1plus_scheme): the row and its value, the page, a swatch per row, the check, a tap saves and applies at once, Background and Accent hide under a scheme."""
+    expect, P = ctx.expect, pod_pages
+    S, W = P.SCHEME_PAGE, P.APPEARANCE_PAGE
+    names = ['Classic', 'Navy & Coral', 'Teal & Sunflower', 'Federal Blue & Fluoro Orange', 'Green & Bright Red', 'Purple & Yellow', 'Burgundy & Mint', 'Black & Fluoro Pink', 'Greyscale']
+    expect([(r.label, r.action, r.arg) for r in S.rows] == [(n, P.ACT_SCHEMESET, i) for i, n in enumerate(names)] and S.title == 'Scheme' and S.key == 'm1plus_scheme' and P.SCHEME_VALUES == tuple(names)
+           and P.PAGES[P.SCHEME_PAGE_INDEX] is S and P.SCHEME_PAGE_INDEX == P.ACCENT_PAGE_INDEX + 1 and all(P.row_kind(r) == 'check' for r in S.rows) and (P.ACT_SCHEME, P.ACT_SCHEMESET) == (191, 192),
+           'the picker: Classic, the seven riso schemes and Greyscale in the saved order, titled Scheme, a check each, right after the Accent picker')
+    expect([(r.label, r.action, r.arg) for r in W.rows][:1] == [('Scheme', P.ACT_SCHEME, P.SCHEME_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value' and [r.label for r in W.rows] == ['Scheme', 'Background', 'Accent', 'Control Center']
+           and W.layout[1] is P.GAP and W.layout[4] is P.GAP, 'the Appearance page: Scheme in a card of its own above Background and Accent, then Control Center')
+    n_rows = len(W.rows)
+
+    def appearance(scheme):
+        m = LM(scheme=scheme)
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(n_rows)] + [f'pod_value{i}' for i in range(n_rows)] + [f'pod_label{i}' for i in range(n_rows)])}
+        row = m.alloc(12)
+        m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
+        m.call(PSYMS['on_row'], a0=row, count=6000000)
+        return m
+
+    def vis(m, i):
+        v = [c for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_row{i}']]
+        s = [c[2] for c in m.calls if c[0] == 'widget_set_sensitive' and c[1] == m.widgets[f'pod_row{i}']]
+        return (v[-1][2] if v else None, s[-1] if s else None)
+    got = []
+    for data in (None, b'0\n', b'1\n', b'4\n', b'8\n', b'9\n'):
+        m = appearance(data)
+        val = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value0']]
+        got.append((val, vis(m, 1), vis(m, 2), vis(m, 0)[1], vis(m, 3)[1]))
+    want = lambda name, on: ([name], (on, on), (on, on), None, None)
+    expect(got == [want('Classic', 1), want('Classic', 1), want('Navy & Coral', 0), want('Green & Bright Red', 0), want('Greyscale', 0), want('Classic', 1)],
+           'the Scheme row shows the saved name (Classic for no or an invalid file); Background and Accent are invisible and insensitive under any other scheme, there under Classic; Scheme and Control Center untouched')
+
+    def open_pick(data=None):
+        m = LM(scheme=data)
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(9)] + [f'pod_check{i}' for i in range(9)])}
+        row = m.alloc(12)
+        m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_SCHEME); m.setword(row + 8, P.SCHEME_PAGE_INDEX)
+        m.call(PSYMS['on_row'], a0=row, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+    m = open_pick()
+    expect(('window_open', S.key) in m.calls and SCHEME_FILE not in m.fs and [shown(m, i) for i in range(9)] == [1] + [0] * 8, 'the picker opens with the check on Classic, saving nothing')
+    expect([[shown(open_pick(d), i) for i in range(9)] for d in (b'3\n', b'8', b'9', b'')] == [[int(i == k) for i in range(9)] for k in (3, 8, 0, 0)], 'a saved scheme has the check; an invalid or empty file is Classic')
+    m = open_pick()
+    for k in (2, 8, 0, 7, 1):
+        n0 = m.unloads
+        m.click(f'pod_row{k}')
+        expect(m.fs.get(SCHEME_FILE) == b'%d\n' % k and SCHEME_TMP not in m.fs and ('rename', SCHEME_TMP, SCHEME_FILE) in m.calls and [shown(m, i) for i in range(9)] == [int(i == k) for i in range(9)]
+               and m.unloads == n0 + 1, f'a tap on {names[k]}: written atomically, applied at once (the cached images dropped), the check follows')
+    m = open_pick(b'1\n'); m.fail.add(('write', SCHEME_TMP)); m.click('pod_row3')
+    expect(m.fs.get(SCHEME_FILE) == b'1\n' and not any(c[0] == 'widget_set_visible' for c in m.calls) and m.unloads == 0, 'a failed write changes neither the file, the check nor the screen')
+    # the assets: a swatch (never a glyph) where a row's glyph goes, hidden insensitive checks
+    raw = os.path.join(WORK, 'rootfs/release/assets/default/raw')
+    tree = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_scheme.bin'), 'rb').read())
+    ok = True
+    for i in range(9):
+        r = tree.find(f'pod_row{i}'); sw = r.find('pod_swatch'); ck = tree.find(f'pod_check{i}')
+        ok &= sw is not None and sw.get('image') == f'pod_sw_s{i}' and sw.get('sensitive') == 'false' and r.find('pod_icon') is None and ck.get('visible') == 'false' and ck.get('sensitive') == 'false'
+    expect(ok and tree.find('label_title').get('tr_text') == 'Scheme', 'the picker asset: a pod_swatch image pod_sw_s<i> in each row (not a pod_icon), a hidden insensitive check each')
+    from PIL import Image
+    imgs = {i: Image.open(os.path.join(raw, f'images/xx/pod_sw_s{i}.png')).convert('RGBA') for i in range(9)}
+    opaque = lambda im: {p[:3] for p in im.getdata() if p[3] == 255}
+    ink = lambda i: L.scheme_ends(L.SCHEMES[i])[1]; paper = (0xF4, 0xF1, 0xEA)
+    expect(all(im.size == (24, 24) for im in imgs.values()) and not opaque(imgs[0]) and imgs[0].getpixel((12, 12))[3] == 0
+           and all({paper, tuple(ink(i)), tuple(L.scheme_accent(L.SCHEMES[i]))} <= opaque(imgs[i]) and imgs[i].getpixel((4, 12))[:3] == paper and imgs[i].getpixel((8, 12))[:3] == tuple(ink(i)) and imgs[i].getpixel((16, 12))[:3] == tuple(L.scheme_accent(L.SCHEMES[i])) for i in range(1, 8))
+           and {(0x8C,) * 3, paper} <= opaque(imgs[8]) and all(im.getpixel((0, 0))[3] == 0 for im in imgs.values()),
+           'the swatches: a 20 px round cream paper disc on a 24 px canvas with the scheme\'s day ink inset on the left and its accent on the right (Greyscale one grey, Classic transparent)')
+    expect(all(L.image_flips(f'pod_sw_s{i}.png', imgs[i]) is None for i in range(9)) and all(L.accent_kind(f'pod_sw_s{i}') is None for i in range(9)), 'a swatch is never flipped by Light nor tinted by an accent')
+    st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_appearance.bin'), 'rb').read())
+    expect(st.find('pod_row0').find('pod_icon').get('image') == 'pod_ci_sun_moon' and st.find('pod_value0').get('tr_text') == 'Classic' and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_contrast',
+           'the Appearance page asset: the Scheme row with the sun-moon glyph, the value "Classic" before the payload sets it')
+
+
 def roles_tests(ctx):
     """The unique role colours: in the built theme and the payload they appear only in their role (the hooks see a colour, not the style it came from)."""
     expect = ctx.expect
@@ -867,7 +947,7 @@ def accent_picker_tests(ctx):
            'the picker: Neutral and the six accents in the saved order, titled Accent, a check each')
     expect(V.rows[row_i].arg == P.APPEARANCE_PAGE_INDEX and V.rows[row_i].action == P.ACT_PAGE and P.row_kind(V.rows[row_i]) == 'link' and [r.label for r in V.rows[row_i - 1:row_i + 2]] == ['Display', 'Appearance', 'Buttons & Power']
            and 'Light Mode' not in [r.label for r in V.rows] and 'Accent' not in [r.label for r in V.rows], 'Settings: an Appearance link (a chevron, no value) after Display; the Light row still hidden')
-    expect([(r.label, r.action, r.arg) for r in W.rows][1:2] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
+    expect([(r.label, r.action, r.arg) for r in W.rows][2:3] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[2]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
            and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W, 'the Appearance page: an Accent value row opening the picker')
 
     def open_pick(data=None):
@@ -900,7 +980,7 @@ def accent_picker_tests(ctx):
         row = m.alloc(12)
         m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
         m.call(PSYMS['on_row'], a0=row, count=6000000)
-        return [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value1']]
+        return [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value2']]
     expect([settings_value(d) for d in (None, b'1\n', b'6\n', b'8')] == [['Neutral'], ['Red'], ['Champagne'], ['Neutral']], 'the Appearance Accent row shows the saved accent, Neutral for no or an invalid file')
     # the assets: a swatch (never a glyph) where a row's glyph goes, hidden insensitive checks
     raw = os.path.join(WORK, 'rootfs/release/assets/default/raw')
@@ -918,7 +998,7 @@ def accent_picker_tests(ctx):
            'the swatches: a 20 px round disc in each accent\'s colour (Neutral #EEEEEC) on a 24 px canvas')
     expect(all(L.image_flips(f'pod_sw{i}.png', imgs[i]) is None for i in range(7)) and all(L.accent_kind(f'pod_sw{i}') is None for i in range(7)), 'a swatch is never flipped by Light nor tinted by an accent')
     st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_appearance.bin'), 'rb').read())
-    expect(st.find('pod_row1') is not None and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_palette' and st.find('pod_value1').get('tr_text') == 'Neutral' and st.find('label_title').get('tr_text') == 'Appearance',
+    expect(st.find('pod_row2') is not None and st.find('pod_row2').find('pod_icon').get('image') == 'pod_ci_palette' and st.find('pod_value2').get('tr_text') == 'Neutral' and st.find('label_title').get('tr_text') == 'Appearance',
            'the Appearance page: the Accent row with the palette glyph, the value "Neutral" before the payload sets it')
     st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_settings.bin'), 'rb').read())
     expect(st.find(f'pod_row{row_i}').find('pod_icon').get('image') == 'pod_ci_palette' and st.find(f'pod_value{row_i}') is None, 'the Settings Appearance row: the palette glyph, no value')
@@ -1248,4 +1328,267 @@ def own_roles_tests(ctx):
         expect(set(h) <= allowed, f'in the sources the {k} role colour is only where it is defined ({h})')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests]
+NIGHT = 1800000000 + 12 * 3600   # 20:00 (the harness' clock is 08:00 UTC, day)
+SCH_GREYS = [word((v, v, v, a)) for v in list(range(0, 256, 15)) + [0x1c, 0x2a, 0x33, 0x44, 0x80, 0xaa, 0xd4, 0xee, 0xff] for a in (255, 0x80)]
+SCH_HUES = [0xff2060ff, 0xff3a45ff, 0x80d1c840, 0xff6aa9c8, 0xff1e1c1c, 0xff201f1f, 0x00000000]
+
+
+def sch_lm(s, day=True, **kw):
+    """A machine with scheme s saved (bytes, or None: no file), by day (08:00) or by night (20:00)."""
+    m = LM(scheme=s, hook=True, **kw)
+    if not day: m.wall = NIGHT
+    return m
+
+
+def luminance(c):
+    ch = [v / 255 for v in c[:3]]
+    ch = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in ch]
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def scheme_map_tests(ctx):
+    """The riso schemes: pal_map and the hooks against tools/palette.py by day and by night; black is the paper, white the ink; the state calls answer the scheme's."""
+    expect = ctx.expect
+    expect(L.SCHEMES == ('classic', 'navy-coral', 'teal-sunflower', 'blue-orange', 'green-red', 'purple-yellow', 'burgundy-mint', 'black-pink', 'greyscale') and O['SCHEME_COUNT'] == len(L.SCHEMES) and O['SCHEME_GREY'] == 8,
+           'nine schemes in saved-digit order: Classic, the seven riso ones, Greyscale')
+    expect(L.SCHEME_PAPER == (0xf4, 0xf1, 0xea), 'the cream paper is #F4F1EA')
+    pal_map = lambda m, c: m.call(PSYMS['pal_map'], a0=c, count=20000)
+    bad = []
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            for c in SCH_GREYS + ROLE_WORDS + NEAR_WORDS + SCH_HUES:
+                if c >> 24 == 0: continue   # (the callers skip a clear colour first: ui_ink, the hooks)
+                want = word(L.map_colour(px(c), scheme=name, day=day))
+                got = pal_map(m, c)
+                if got != want: bad.append((name, day, hex(c), hex(got), hex(want)))
+            lo, hi = L.scheme_ends(name, day)
+            acc = L.scheme_accent(name)
+            expect(pal_map(m, BLACK) == word(lo + (255,)) and pal_map(m, WHITE) == word(hi + (255,)) and lo == (L.SCHEME_PAPER if day else L.scheme_ends(name, False)[0]) and hi == (L.scheme_ends(name, True)[1] if day else L.SCHEME_PAPER),
+                   f'{name} {"day" if day else "night"}: black is {"the cream" if day else "the night paper"} {lo}, white {"the ink" if day else "the cream"} {hi}')
+            st = [m.call(PSYMS[f], count=20000) for f in ('pal_active', 'pal_light', 'pal_scheme', 'pal_scheme_on')]
+            ac = m.call(PSYMS['pal_accent'], count=20000)
+            expect(st == [1, int(day), s, s] and ac and m.call(PSYMS['pal_accent_color'], a0=ac, count=2000) == word(acc + (255,)) and m.call(PSYMS['pal_fill'], count=2000) == word(acc + (255,)),
+                   f'{name} {"day" if day else "night"}: active, pal_light {int(day)}, the scheme saved and on, pal_accent truthy ({ac}) and its colour and pal_fill the scheme accent {acc} ({st})')
+            sty = m.style(color=BLACK)
+            expect(m.color(sty) == word(lo + (255,)) and m.gradient(m.style(grads=[BLACK, WHITE]))[1] == [word(lo + (255,)), word(hi + (255,))] and m.call(PSYMS['ui_ink'], a0=0, count=20000) == 0,
+                   f'{name} {"day" if day else "night"}: style_get_color and style_get_gradient answer the remap, a clear colour stays clear')
+    expect(not bad, f'pal_map under every riso scheme, by day and by night, on greys, role, near-miss and hue colours matches the model ({bad[:4]})')
+    # the secondary grey keeps 4.5:1 on cream by day: #AAAAAA maps as SCHEME_SUB
+    expect(L.map_colour((0xaa,) * 3 + (255,), scheme='navy-coral') == L.map_colour((0xd4,) * 3 + (255,), scheme='navy-coral') and L.map_colour((0xaa,) * 3, scheme='navy-coral', day=False) != L.map_colour((0xd4,) * 3, scheme='navy-coral', day=False),
+           'by day #AAAAAA maps as #D4D4D4; by night as itself')
+    # the roles: a pressed row is the mapped black tinted by the scheme accent; the progress fill the accent
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            lo, acc = L.scheme_ends(name, day)[0], L.scheme_accent(name)
+            row = L.mix_tint(lo, acc)
+            got = (pal_map(m, word(rgba(L.ROLE_PRESS_ROW))), pal_map(m, word(rgba(L.ROLE_PROGRESS, 0xeb))), pal_map(m, word(rgba(L.ROLE_PRESS_PILL))))
+            expect(got == (word(row + (255,)), word(acc + (0xeb,)), word(L.mix_tint(L.remap(L.PILL, name, day), acc) + (255,))),
+                   f'{name} {"day" if day else "night"}: the pressed row is mix(mapped black, accent) {row}, the progress fill the accent, the pressed pill the mapped pill tinted')
+    # the cost of a style call under a scheme
+    m = LM(scheme=b'1\n', hook=True).count()
+    s = m.style(color=ROLE_WORDS[0]); m.color(s); m.color(s); c_role = m.icount
+    m.color(m.style(color=WHITE)); c_plain = m.icount
+    expect(c_role < 1200 and c_plain < 1200, f'a style call under a scheme costs {c_role} instructions on a role colour and {c_plain} on any other')
+    print(f'  style call under a scheme: {c_role} (role colour), {c_plain} (other)')
+
+
+def scheme_setting_tests(ctx):
+    """The saved scheme: Classic when absent or invalid, overrides Background and Accent, saved atomically and applied at once; the kill switch, the bad-boot note and the clock."""
+    expect = ctx.expect
+    pal_map = lambda m, c: m.call(PSYMS['pal_map'], a0=c, count=20000)
+    on = lambda m: m.call(PSYMS['pal_scheme_on'], count=20000)
+    # Classic: no file, 0, or anything invalid behaves as before, with Background and Accent applying
+    for data in (None, b'0\n', b'0', b'9', b'9\n', b'x', b'', b'11', b'-1'):
+        m = LM(b'2\n', acc=b'1\n', scheme=data, hook=True)
+        got = [pal_map(m, c) for c in ROLE_WORDS + NEAR_WORDS]
+        expect(m.call(PSYMS['pal_scheme'], count=20000) == 0 and on(m) == 0 and got == [word(L.map_colour(px(c), 'light', 'red')) for c in ROLE_WORDS + NEAR_WORDS] and m.call(PSYMS['pal_accent'], count=20000) == 1
+               and m.fs.get(SCHEME_FILE) == data, f'saved scheme {data!r}: Classic, Light + Red as before, and reading writes nothing')
+        m = LM(scheme=data, hook=True)
+        expect(m.call(PSYMS['pal_active'], count=20000) == 0 and m.timers == [] and pal_map(m, BLACK) == BLACK, f'saved scheme {data!r} with Black + Neutral: inactive, no timer')
+    # a scheme overrides the Background and the Accent
+    for bg, acc in ((b'2\n', None), (b'1\n', b'3\n'), (b'3\n', b'6\n')):
+        m = LM(bg, acc=acc, scheme=b'4\n', hook=True)
+        expect([pal_map(m, c) for c in SCH_GREYS + ROLE_WORDS] == [word(L.map_colour(px(c), scheme='green-red')) for c in SCH_GREYS + ROLE_WORDS] and m.call(PSYMS['pal_background'], count=20000) == 1,
+               f'background {bg!r}, accent {acc!r} under Green & Red: the scheme mapping')
+    m = LM(b'1\n', acc=b'3\n', scheme=b'4\n', hook=True)
+    pal_map(m, BLACK)
+    r = m.call(PSYMS['pal_scheme_set'], a0=0, count=2000000)
+    calls = list(m.calls)
+    expect(r == 0 and m.fs[SCHEME_FILE] == b'0\n' and ('rename', SCHEME_TMP, SCHEME_FILE) in calls and m.unloads == 1 and ('widget_invalidate_force', m.wm) in calls, 'pal_scheme_set(0): saved atomically, applied (images dropped, repaint)')
+    expect(m.call(PSYMS['pal_background'], count=20000) == 2 and pal_map(m, BLACK) == word(L.map_colour((0, 0, 0, 255), 'tinted', 'green')) and on(m) == 0, 'and Tinted + Green are back')
+    r = m.call(PSYMS['pal_scheme_set'], a0=4, count=2000000)
+    expect(r == 4 and m.fs[SCHEME_FILE] == b'4\n' and m.unloads == 2 and pal_map(m, BLACK) == word(L.map_colour((0, 0, 0, 255), scheme='green-red')) and on(m) == 4, 'pal_scheme_set(4): saved and applied at once')
+    m.call(PSYMS['pal_scheme_set'], a0=4, count=2000000)
+    expect(m.unloads == 2 and len(m.timers) == 1, 'choosing the scheme it is in drops nothing; one timer')
+    for bad in (-1, 9, 99):
+        before = (m.fs[SCHEME_FILE], m.unloads)
+        expect(m.call(PSYMS['pal_scheme_set'], a0=bad & 0xffffffff, count=2000000) == 0xffffffff and (m.fs[SCHEME_FILE], m.unloads) == before and on(m) == 4, f'pal_scheme_set({bad}) is refused and changes nothing')
+    m = LM(scheme=b'1\n', hook=True); m.fail.add(('write', SCHEME_TMP))
+    expect(m.call(PSYMS['pal_scheme_set'], a0=3, count=2000000) == 0xffffffff and m.fs.get(SCHEME_FILE) == b'1\n' and on(m) == 1 and m.unloads == 0, 'a failed write changes neither the file nor the scheme')
+    m = LM(hook=True)
+    m.call(PSYMS['pal_scheme_set'], a0=6, count=2000000)
+    n = LM(scheme=m.fs[SCHEME_FILE], hook=True)
+    expect(on(n) == 6 and len(m.timers) == 1 and len(n.timers) == 1, 'a saved scheme is the scheme of the next boot; a scheme arms the one timer')
+    m.call(PSYMS['pal_scheme_set'], a0=0, count=2000000)
+    expect(('timer_remove', 0x777) in m.calls and m.call(PSYMS['pal_active'], count=20000) == 0, 'Classic with Black + Neutral ends the timer, the palette inactive')
+    # the kill switch and the bad-boot note: Classic, inactive (the saved choice stays)
+    for kw in ({'kill': True}, {'bad': True}):
+        m = LM(b'2\n', acc=b'1\n', scheme=b'2\n', hook=True, **kw)
+        expect(m.call(PSYMS['pal_active'], count=20000) == 0 and on(m) == 0 and m.call(PSYMS['pal_scheme'], count=20000) == 2 and m.color(m.style(color=BLACK)) == BLACK,
+               f'{kw}: inactive, the hooks stock\'s, the saved scheme kept')
+    # day and night: the tick at LIGHT_UNTIL changes the mapping
+    m = LM(scheme=b'3\n', hook=True); m.wall = 1800000000 + 10 * 3600 + 59 * 60 + 30   # 18:59:30
+    expect(pal_map(m, BLACK) == word(L.SCHEME_PAPER + (255,)) and m.call(PSYMS['pal_light'], count=20000) == 1, 'Federal Blue at 18:59: cream, pal_light 1')
+    cb = m.timers[0][0]
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 0, 'a tick inside the day changes nothing')
+    m.wall += 60
+    r = m.call(cb, a0=0, count=200000)
+    expect(r == O['RET_REPEAT'] and m.unloads == 1 and m.call(PSYMS['pal_light'], count=20000) == 0 and pal_map(m, BLACK) == word(L.scheme_ends('blue-orange', False)[0] + (255,)), 'at 19:00 the tick reports the change: images dropped, black is the night paper, pal_light 0')
+    m.wall += 12 * 3600
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 2 and pal_map(m, BLACK) == word(L.SCHEME_PAPER + (255,)), 'and at 7:00 cream again')
+    m.present.add(KILL_SD)
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 3 and m.call(PSYMS['pal_active'], count=20000) == 0, 'the kill switch appearing turns it off at the next tick')
+    # Greyscale: images-only; styles pass through and Background / Accent are ignored
+    m = LM(b'2\n', acc=b'1\n', scheme=b'8\n', hook=True)
+    st = [m.call(PSYMS[f], count=20000) for f in ('pal_active', 'pal_light', 'pal_accent', 'pal_background', 'pal_scheme_on')]
+    expect(st == [1, 0, 0, 0, 8] and all(pal_map(m, c) == c for c in SCH_GREYS + ROLE_WORDS) and m.color(m.style(color=ROLE_WORDS[0])) == ROLE_WORDS[0] and len(m.timers) == 1,
+           f'Greyscale: active (images), the styles pass through, Light and the accent ignored ({st})')
+    g = glyph_image()
+    expect(m.image('np_play', 16, 16, g) == g and m.image('pod_ic_songs', 16, 16, g) == g, 'Greyscale: the theme\'s images are as they are')
+
+
+def scheme_image_tests(ctx):
+    """The image hook under the riso schemes: tinted names, glyphs (the scheme's glyph colour), fills (its accent), the pressed card and Shuffle disc (the remapped surface) and every other small image
+    (Light's rule between the scheme's ends) against the model, by day and by night; and the contrast the colours keep."""
+    expect = ctx.expect
+    from PIL import Image
+    d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
+    names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
+    glyphs = [n for n in names if L.accent_kind(n) == 'glyph']
+    tinted = list(L.ACCENT_ALL) + glyphs[::8]
+    bad, n = [], 0
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            for nm in tinted:
+                im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+                if im.width * im.height > (6000 if s == 1 else 1200): continue   # (every image under the first scheme; the small ones under the rest)
+                heap0 = m.heap
+                got = m.image(nm, im.width, im.height, list(im.getdata()))
+                m.heap = heap0
+                n += 1
+                if got != list(L.render_image(nm, im, scheme=name, day=day).getdata()): bad.append((name, day, nm))
+    expect(not bad, f'{n} tinted images under the riso schemes, day and night, match the model pixel for pixel ({bad[:4]})')
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            acc, gl = L.scheme_accent(name), L.scheme_glyph(name, day)
+            m = sch_lm(b'%d\n' % s, day)
+            g = glyph_image()
+            out = {p[:3] for p in m.image('pod_ic_songs', 16, 16, g) if p[3]}
+            fill = {p[:3] for p in m.image('pod_check', 4, 4, [(238, 238, 236, 255)] * 16)}
+            card = {p[:3] for p in m.image('pod_cd_mid_down', 4, 4, [(0x30, 0x30, 0x32, 255)] * 16)}
+            expect(out == {gl} and fill == {acc} and card == {L.mix_tint(L.remap(L.CARD, name, day), acc)} and gl == L.scheme_glyph(name, day) and gl == tuple(O[f'SCH{s}_{"GDAY" if day else "GNIGHT"}'].to_bytes(3, 'big')),
+                   f'{name} {"day" if day else "night"}: a row glyph is the glyph colour {gl}, a fill the accent {acc}, the pressed card the mapped card tinted')
+    im = Image.open(os.path.join(d, 'ah_shuffle_down.png')).convert('RGBA')
+    out = {p[:3] for p in L.render_image('ah_shuffle_down', im, scheme='navy-coral').getdata() if p[3] == 255}
+    expect(L.mix_tint(L.remap(L.SHUF, 'navy-coral', True), L.scheme_accent('navy-coral')) in out and L.remap((255, 255, 255), 'navy-coral', True) in out, 'the pressed Shuffle disc by day: the cream disc tinted, the glyph the ink')
+    g = glyph_image()
+    lo, hi = L.scheme_ends('navy-coral', True)
+    expect(sch_lm(b'1\n').image('np_play', 16, 16, g) == [hi + (255,) if p[3] else p for p in g], 'by day a white glyph becomes the ink')
+    expect(L.render_image('np_play', Image.new('RGBA', (2, 2), (255, 255, 255, 255)), 'light', 'red') == L.flip_image('np_play', Image.new('RGBA', (2, 2), (255, 255, 255, 255))), 'Classic Light is the flip as before')
+    # the image hook's cost under a scheme on a name it does not tint
+    m = LM(scheme=b'1\n').count()
+    n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
+    print(f'  hook on an untinted image under a scheme: {c} instructions')
+    # contrast: the ink and the secondary grey on the paper keep 4.5:1, the glyph colour 3:1
+    rows = []
+    for name in L.SCHEMES[1:-1]:
+        for day in (True, False):
+            paper = L.map_colour((0, 0, 0), scheme=name, day=day)
+            ink_, sub = L.map_colour((255, 255, 255), scheme=name, day=day), L.map_colour((0xaa,) * 3, scheme=name, day=day)
+            k = (contrast(ink_, paper), contrast(sub, paper), contrast(L.scheme_glyph(name, day), paper))
+            rows.append(k)
+            expect(k[0] >= 4.5 and k[1] >= 4.5 and k[2] >= 3, f'{name} {"day" if day else "night"}: ink {k[0]:.2f}, secondary {k[1]:.2f}, glyph {k[2]:.2f} on the paper')
+    print('  contrast (ink, secondary, glyph) minimum: ' + ', '.join(f'{min(r[i] for r in rows):.2f}' for i in range(3)))
+
+
+def scheme_light_tests(ctx):
+    """Every other small image of the tree under a riso scheme (by day and by night) follows Light's rule between the scheme's ends, as the model says."""
+    expect = ctx.expect
+    from PIL import Image
+    d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
+    names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
+    for s, name, day in ((1, 'navy-coral', True), (5, 'purple-yellow', False)):
+        m = sch_lm(b'%d\n' % s, day)
+        bad = []
+        for nm in names:
+            if L.accent_kind(nm): continue
+            im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+            if im.width * im.height > 4000: continue
+            heap0 = m.heap
+            got = m.image(nm, im.width, im.height, list(im.getdata()))
+            m.heap = heap0
+            if got != list(L.render_image(nm, im, scheme=name, day=day).getdata()): bad.append(nm)
+        expect(not bad, f'{name} {"day" if day else "night"}: the other images follow Light\'s rule between the scheme\'s ends ({bad[:4]})')
+
+
+def grey_tests(ctx):
+    """Greyscale: a cover (a path or URL) comes back grey, every pixel its Rec. 601 luma, alpha kept, in every format and premultiplied; theme images, wallpapers and the style hook stay;
+    pal_tone answers the tone's grey; Classic leaves covers alone; the tone cache keeps no grey tone. Under a riso scheme the Library tiles' square is remapped, under Classic it stays."""
+    expect = ctx.expect
+    from PIL import Image
+    px = [(r, g, b, a) for r in (0, 0x30, 0xc0, 255) for g in (0, 0x60, 255) for b in (0, 0x30, 255) for a in (255, 0x80)]
+    px = (px * 2)[:64]
+    grey = [L.grey_pixel(p) for p in px]
+    for nm in ('/mnt/mmc/a/cover.jpg', 'http://x/a.jpg', 'file:///mnt/mmc/.m1plus/covers/a.jpg'):
+        for fmt in (1, 2, 3, 4):
+            expect(sch_lm(b'8\n').image(nm, 8, 8, px, fmt=fmt) == grey, f'Greyscale: {nm} format {fmt} comes back grey, each pixel (y, y, y, a)')
+        got = sch_lm(b'8\n', False).image(nm, 8, 8, px)
+        expect(got == grey and got == list(L.render_image(nm, Image.frombytes('RGBA', (8, 8), bytes(c for p in px for c in p)), scheme='greyscale').getdata()), f'{nm} by night the same, and the model agrees')
+    st = [(v * a // 255, w * a // 255, u * a // 255, a) for v, w, u, a in px]
+    got = sch_lm(b'8\n').image('/mnt/mmc/a/cover.jpg', 8, 8, st, premul=True)
+    expect(got == [L.grey_pixel(p) for p in st] and all(max(p[:3]) <= p[3] for p in got), 'a premultiplied cover greys as stored (luma is linear) and stays within its alpha')
+    expect(L.grey_pixel((0xc0, 0x60, 0x30, 0x80)) == ((0xc0 * 299 + 0x60 * 587 + 0x30 * 114) // 1000,) * 3 + (0x80,), 'the model: y = (r*299 + g*587 + b*114) / 1000')
+    m = sch_lm(b'8\n')
+    for nm in ('pod_ic_x', 'np_play', '/mnt/mmc/lockscreenimage/a.jpg'):
+        expect(m.image(nm, 8, 8, px) == px, f'Greyscale: {nm} stays as it is (a theme image, or a lock screen wallpaper)')
+    expect(m.color(m.style(color=0xff3060c0)) == 0xff3060c0 and m.color(m.style(color=WHITE)) == WHITE, 'Greyscale: the style hook passes colours through')
+    t = 0xff3060c0
+    y = (0xc0 * 299 + 0x60 * 587 + 0x30 * 114) // 1000
+    got = m.call(PSYMS['pal_tone'], a0=t, count=20000)
+    expect(got == 0xff000000 | y * 0x010101 and got == word(L.tone((0xc0, 0x60, 0x30, 255), 'greyscale')), f'pal_tone(0x{t:08x}) under Greyscale is its grey 0x{got:08x}')
+    expect(sch_lm(b'8\n', False).call(PSYMS['pal_tone'], a0=t, count=20000) == got, 'by night as well')
+    for s in (b'0\n', None):
+        n = sch_lm(s)
+        expect(n.image('/mnt/mmc/a/cover.jpg', 8, 8, px) == px and n.image('http://x/a.jpg', 8, 8, px) == px, f'Classic ({s}): covers untouched')
+    out = m.alloc(4)
+    m.call(PSYMS['m1_tone_put'], a0=7, a1=0xff3060c0, count=100000)
+    expect(m.call(PSYMS['m1_tone_get'], a0=7, a1=out, count=100000) == 0, 'Greyscale: the tone cache stores nothing (no grey tone outlives the scheme)')
+    c = sch_lm(b'0\n')
+    c.call(PSYMS['m1_tone_put'], a0=7, a1=0xff3060c0, count=100000)
+    expect(c.call(PSYMS['m1_tone_get'], a0=7, a1=out, count=100000) and c.word(out) == 0xff3060c0, 'Classic: the tone cache stores as before')
+    # cost of greying a cover
+    g = sch_lm(b'8\n').count(); n0 = g.icount; g.image('/mnt/mmc/a/cover.jpg', 8, 8, px); cg = g.icount - n0
+    print(f'  Greyscale on an 8 x 8 cover: {cg} instructions ({cg / 64:.1f} a pixel)')
+    # the Library tiles' square: remapped under a riso scheme, as it is under Classic
+    sq = [(0x1c, 0x1c, 0x1e, 255)] * 16
+    for s, name in ((1, 'navy-coral'), (5, 'purple-yellow')):
+        for day in (True, False):
+            want = L.remap(L.TILE, name, day)
+            expect({p[:3] for p in sch_lm(b'%d\n' % s, day).image('pod_ic_dltile', 4, 4, sq)} == {want} and want != L.TILE, f'{name} {"day" if day else "night"}: a Library tile\'s square is the remapped {want}')
+    for acc in (b'1\n', b'4\n'):
+        for mode in (b'0\n', b'1\n', b'2\n'):
+            expect({p[:3] for p in LM(mode, acc=acc).image('pod_ic_dltile', 4, 4, sq)} == {L.TILE}, f'Classic (background {mode}, accent {acc}): the tile square stays #1C1C1E')
+
+
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, scheme_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests, grey_tests]

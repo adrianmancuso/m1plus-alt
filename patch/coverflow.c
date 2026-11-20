@@ -388,12 +388,12 @@ static void fx_close(void) {
     memset(&fx, 0, sizeof fx);
 }
 
-/* The page's shelf now: the portrait one, or the landscape one turned a quarter; over a background that is not black (Light's paper, Tinted's washed black) the same over that
+/* The page's shelf now: the portrait one, or the landscape one turned a quarter; over a background that is not black (Light's paper, a riso scheme's paper, Tinted's washed black) the same over that
  * colour (bg: the covers fade towards it, as on the Pod's white Cover Flow). The colour is the palette's own for the page's black, so the frame has no edge on the page. */
 static const cfg_t *shelf(void) {
     static cfg_t lit __attribute__((section(".scratch")));
     const cfg_t *g = cf.land ? &cf_land : &cf_portrait;
-    unsigned i, bg = pal_light() ? LIGHT_PAPER * 0x010101u : pal_map(0xff000000u) & 0xffffffu;
+    unsigned i, bg = pal_map(0xff000000u) & 0xffffffu;
     if (!bg) return g;
     for (i = 0; i < sizeof lit / sizeof(int); ++i)
         ((int *)&lit)[i] = ((const int *)g)[i]; /* (a struct copy would call memcpy) */

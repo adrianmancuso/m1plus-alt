@@ -697,8 +697,8 @@ def dev_asset_tests(ctx):
     by = {w.name: w for w in tree.walk() if w.name}
     wby = {w.name: w for w in wtree.walk() if w.name}
     pg = P.BTDEVICE_PAGE
-    expect(P.PAGES[-3] is pg and P.PAGES[-4] is P.BTCODEC_PAGE and pg.kind == 'btdevice' and pg.key == 'm1plus_btdevice' and tree.name == pg.name and P.page_index('m1plus_btdevice') == 118 and len(P.PAGES) == 121,
-           'the page is registered after the Audio Codec picker: index 118 of 121 (the two Playback Settings sub-pages follow)')
+    expect(P.PAGES[-3] is pg and P.PAGES[-4] is P.BTCODEC_PAGE and pg.kind == 'btdevice' and pg.key == 'm1plus_btdevice' and tree.name == pg.name and P.page_index('m1plus_btdevice') == 119 and len(P.PAGES) == 122,
+           'the page is registered after the Audio Codec picker: index 119 of 122 (the two Playback Settings sub-pages follow)')
     expect(by['label_title'].get('tr_text') == 'Bluetooth' and 'btn_return' in by and 'btn_backtoplayer' in by and 'navigationbar_view' in by, 'the navbar is ours: Back, Now Playing and a title the payload replaces by the name')
     geo = lambda w: (w.x, w.y, w.w, w.h)
     sv = by['btdevice_scrollview']
