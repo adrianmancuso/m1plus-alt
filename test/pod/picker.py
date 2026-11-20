@@ -21,6 +21,12 @@ def playlists_module():
 LIB, CLS = 0xf001, 0xf001
 NAV_TITLE, G_CLASS, CLASSINFO = pod.DATA['NAV_TITLE'][0], pod.DATA['G_CLASS_TYPE'][0], pod.DATA['CLASSINFO'][0]
 SHOWLIST, SEL_VEC = pod.DATA['PDEQ_SHOWLIST'][0], pod.DATA['SEL_VEC'][0]
+RECENT = '/mnt/data/m1plus/playlists-recent'
+
+
+def U(text):
+    """A toast as the harness records it: the UTF-8 bytes read as latin-1."""
+    return text.encode('utf-8').decode('latin-1')
 LISTS = [(1, 'Road Trip', [0, 1, 2, 3]), (2, 'Late Night', [1, 4]), (3, 'Focus', [5])]
 
 
@@ -89,8 +95,8 @@ def run(ctx):
            'the list is the picker\'s copy of the songs (the page\'s own queries replaced *pdeq_showlist)')
     expect([c for c in calls if c[0] == 'select_recordinit'] == [('select_recordinit', 6)] and [c[1] for c in calls if c[0] == 'set_selectindex'] == [1, 3],
            'the stock vector is filled from the marks just before')
-    expect(('toast', 'msg_addplaylistsuccess', 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] == 'navigator_back'],
-           'the stock "Added To Playlist" message, then the picker\'s window is closed as the stock handler closes its own')
+    expect(('toast', U('Added to “Late Night”'), 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] == 'navigator_back'],
+           'the message names the playlist (Added to “Late Night”), then the picker\'s window is closed as the stock handler closes its own')
     calls = PL.tap(m, 100, PL.TOP + 4 * ROW + 20)
     expect(not [c for c in calls if c[0] == 'batch_add_file'], 'a second tap adds nothing again')
     destroy(m)
@@ -100,7 +106,7 @@ def run(ctx):
     expect(r == 1, 'and a new picker opens')
     destroy(m)
 
-    # 2b. The Favourites row: the stock Add button's Favourites path (@0x5281c8): batch_add_file(class, 0xf00a, list, vector, 0), msg_addfavsuccess
+    # 2b. The Favourites row: the stock Add button's Favourites path (@0x5281c8): batch_add_file(class, 0xf00a, list, vector, 0), then Added to “Favorites”
     m = caller(PL)
     open_picker(m); PL.settle(m)
     m.setword(CLASSINFO + 4, 5); m.u.mem_write(NAV_TITLE, b'x\0')
@@ -111,9 +117,9 @@ def run(ctx):
     expect(add and add[0][3] != m.word(SHOWLIST) and [m.deques[add[0][3]][i] for i in range(6)] == m.songs
            and [c for c in calls if c[0] == 'select_recordinit'] == [('select_recordinit', 6)] and [c[1] for c in calls if c[0] == 'set_selectindex'] == [1, 3],
            'on the picker\'s copy of the list, the stock vector filled from the marks')
-    expect(('toast', 'msg_addfavsuccess', 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] in ('navigator_back', 'createPlayListItem')]
-           and not [c for c in calls if c[0] == 'toast' and c[1] != 'msg_addfavsuccess'],
-           'the stock "Added To Fav" message, then the picker\'s window is closed')
+    expect(('toast', U('Added to “Favorites”'), 1, 2000) in calls and ('window_close', m.window) in calls and not [c for c in calls if c[0] in ('navigator_back', 'createPlayListItem')]
+           and not [c for c in calls if c[0] == 'toast' and c[1] != U('Added to “Favorites”')] and '/mnt/data/m1plus/playlists-recent' not in m.fs,
+           'the message Added to “Favorites” (Favorites is not a recent playlist), then the picker\'s window is closed')
     calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)
     expect(not [c for c in calls if c[0] == 'batch_add_file'], 'a second tap (on a playlist) adds nothing again')
     destroy(m)
@@ -139,8 +145,8 @@ def run(ctx):
     m.call(PSYMS['pl_pick_fire'], count=40000000)
     add = [c for c in m.calls if c[0] == 'batch_add_file']
     expect(len(add) == 1 and add[0][1:3] == (CLS, O['CLASS_PLAYLISTS']) and add[0][5] == 9 and add[0][6] == [1, 3]
-           and ('toast', 'msg_addplaylistsuccess', 1, 2000) in m.calls and ('window_close', m.window) in m.calls,
-           'the timer: the new playlist (id 9) gets the marked songs, the message, the page closes')
+           and ('toast', U('Added to “Mix”'), 1, 2000) in m.calls and ('window_close', m.window) in m.calls and m.fs.get(RECENT) == b'9\n',
+           'the timer: the new playlist (id 9) gets the marked songs, the message names it, it is the recent playlist, the page closes')
     expect(record_ok(m), 'the browsing record is the caller\'s after the creating queries')
     destroy(m)
     # Back (or anything that ends the page) before the timer fires: the timer is removed and nothing is added
@@ -219,3 +225,80 @@ def run(ctx):
     expect([x[0] for x, s in zip(texts, styles) if s == 'label_grid_title'][:3] == ['Focus', 'Late Night', 'Road Trip'] and first_bound,
            'the Playlists page below is as it was: its grid, its tiles')
     expect(record_ok(m), 'and the caller\'s record is back')
+
+    # 7. Recent playlists (RECENT: ids, newest first, at most 3) between Favorites and the A-Z list, and the messages that name the target
+    def rows(m):
+        blits, texts, styles = PL.settle(m)
+        return ([x[0] for x, s in zip(texts, styles) if s == 'label_row_title'], [x[0] for x, s in zip(texts, styles) if s == 'label_row_sub'])
+    m = caller(PL); m.fs[RECENT] = b'1\n2\n'
+    open_picker(m)
+    titles, subs = rows(m)
+    expect(titles[:6] == ['playlist_create', 'Favorites', 'Road Trip', 'Late Night', 'Focus', 'Late Night']
+           and subs[:4] == ['Recent · 4 tracks', 'Recent · 2 tracks', '1 track', '2 tracks'],
+           f'the recent playlists follow Favorites, newest first, "Recent · N tracks", and stay in the A-Z list ({titles}, {subs})')
+    expect(m.word(m.widgets['view_grid'] + 0xc) == PL.TOP + 7 * ROW, 'seven rows high')
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)   # the second recent row: Late Night (2)
+    add = [c for c in calls if c[0] == 'batch_add_file']
+    expect(len(add) == 1 and add[0][5] == 2 and ('toast', U('Added to “Late Night”'), 1, 2000) in calls and m.fs.get(RECENT) == b'2\n1\n',
+           f'a tap on a recent row adds to that playlist and moves it first ({add}, {m.fs.get(RECENT)!r})')
+    destroy(m)
+    for saved, want in ((b'7\n2\n2\nx\n-3\n', ['Late Night']), (b'', []), (b'3\n2\n1\n4\n', ['Focus', 'Late Night', 'Road Trip'])):
+        m = caller(PL); m.fs[RECENT] = saved
+        open_picker(m)
+        titles, subs = rows(m)
+        expect(titles[2:3 + len(want)] == want + ['Focus'],
+               f'{saved!r}: a deleted playlist, a repeat, a line that is no id and anything past three are left out ({titles})')
+        destroy(m)
+    for saved, tap_row, want in ((b'1\n2\n3\n', 2, b'1\n2\n3\n'), (b'1\n2\n3\n', 5, b'3\n1\n2\n'), (b'3\n2\n', 5, b'2\n3\n')):
+        m = caller(PL); m.fs[RECENT] = saved
+        open_picker(m); rows(m)
+        PL.tap(m, 100, PL.TOP + tap_row * ROW + 20)
+        expect(m.fs.get(RECENT) == want, f'{saved!r}, a tap on row {tap_row}: {want!r} ({m.fs.get(RECENT)!r})')
+        destroy(m)
+    m = caller(PL); m.fs[RECENT] = b'1\n2\n3\n'
+    open_picker(m); rows(m)
+    m.create_ret = 9
+    m.call(PSYMS['pl_named'], a0=m.cstr('Mix'), count=40000000)
+    m.call(PSYMS['pl_pick_fire'], count=40000000)
+    expect(m.fs.get(RECENT) == b'9\n1\n2\n', f'a new playlist goes first and the oldest of three drops off ({m.fs.get(RECENT)!r})')
+    destroy(m)
+
+    # Already in: every marked song is in the playlist (checkPlayListExist) or Favorites (checkFavExist): nothing added, the message says so
+    m = caller(PL)
+    m.pl_rows = [(200, 2, '/mnt/mmc/s/1.flac', 'S1'), (201, 2, '/mnt/mmc/s/3.flac', 'S3')]
+    open_picker(m); rows(m)
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)
+    expect(not [c for c in calls if c[0] == 'batch_add_file'] and ('toast', U('Already in “Late Night”'), 1, 2000) in calls and ('window_close', m.window) in calls
+           and m.fs.get(RECENT) == b'2\n', f'both songs already in Late Night: nothing added, Already in “Late Night”, still the recent playlist ({[c for c in calls if c[0] == "toast"]})')
+    destroy(m)
+    m = caller(PL)
+    m.pl_rows = [(200, 2, '/mnt/mmc/s/1.flac', 'S1')]
+    open_picker(m); rows(m)
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)
+    expect(len([c for c in calls if c[0] == 'batch_add_file']) == 1 and ('toast', U('Added to “Late Night”'), 1, 2000) in calls,
+           'one of the two already there: the add runs (stock skips the one) and the message is Added to')
+    destroy(m)
+    m = caller(PL)
+    m.fav_rows = [('1.flac', '/mnt/mmc/s/1.flac', 'S1'), ('3.flac', '/mnt/mmc/s/3.flac', 'S3')]
+    for i in (1, 3): m.setword(m.songs[i] + O['REC_NAME'], m.cstr(f'{i}.flac'))
+    open_picker(m); rows(m)
+    calls = PL.tap(m, 100, PL.TOP + ROW + 20)
+    expect(not [c for c in calls if c[0] == 'batch_add_file'] and ('toast', U('Already in “Favorites”'), 1, 2000) in calls and RECENT not in m.fs,
+           'both songs already Favorites: nothing added, Already in “Favorites”')
+    destroy(m)
+
+    # 8. Now Playing's Add to playlist (patch/playmore.c pm_on_addpl): picker_open_one on the playing track's record, a copy of one row, marked
+    m = caller(PL)
+    track = m.record(title='Playing', path='/mnt/mmc/s/p.flac', rid=300)
+    r = m.call(PSYMS['picker_open_one'], a0=CLS, a1=track, count=60000000)
+    titles, subs = rows(m)
+    expect(r == 1 and titles[:3] == ['playlist_create', 'Favorites', 'Focus'], f'one record: the picker opens ({r}, {titles})')
+    calls = PL.tap(m, 100, PL.TOP + 3 * ROW + 20)   # Late Night (2)
+    add = [c for c in calls if c[0] == 'batch_add_file']
+    expect(len(add) == 1 and add[0][1] == CLS and add[0][5] == 2 and add[0][6] == [0] and add[0][3] != m.word(SHOWLIST)
+           and ('toast', U('Added to “Late Night”'), 1, 2000) in calls and m.fs.get(RECENT) == b'2\n' and record_ok(m),
+           f'a tap adds the one track (its own list, not the page\'s) and names the playlist; the record is back ({add})')
+    destroy(m)
+    m = caller(PL)
+    r = m.call(PSYMS['picker_open_one'], a0=CLS, a1=0, count=60000000)
+    expect(r == 0xffffffff and not [c for c in m.calls if c[0] == 'window_open'], 'nothing playing (no record): -1, no window')

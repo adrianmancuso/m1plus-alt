@@ -35,7 +35,6 @@ STOCK = {
     'msg_playlistfull': 'Playlist Is Full',        # the message boxes of a New playlist that cannot be made (the stock create handler's)
     'msg_playlistexist': 'Playlist Already Exists',
     'msg_addplaylistsuccess': 'Added To Playlist',   # the Daily Mix page's Add disc and the stock playlist picker (@0x53d51c) after a successful add
-    'msg_addfavsuccess': 'Added To Fav',   # the picker's Favourites row after a successful add (stock Add button's Favourites path, @0x52822c)
     'msg_delsong': 'Delete Song?',             # its confirm dialog and the stock message boxes it shows
     'msg_delsongfailed': 'Failed To Delete Song',
     'msg_delsongsuccess': 'Song Deleted',
@@ -514,6 +513,14 @@ TEXT = dict([
        '%d canciones', '%d brani', '%d เพลง', 'Utwory: %d', 'Песен: %d', 'Пісень: %d'),
     # The Playlists page (patch/playlists.c): the menu row that opens the stock Playlists page to delete (its multi-select button), and the
     # empty page's line. New / Import / Export playlist are the stock keys (STOCK).
+    # The Add to Playlist picker (patch/picker.c, docs/modules/picker.md): a recent playlist's row subtitle (" · N tracks" follows), and the messages that name the
+    # playlist or Favorites (nothing is added when every song is already there). Machine translations, unreviewed.
+    _t('Recent', '最近', '最近', '最近', '최근', 'Récent', 'Zuletzt',
+       'Reciente', 'Recente', 'ล่าสุด', 'Ostatnio', 'Недавний', 'Нещодавній'),
+    _t('Added to “%s”', '已添加到“%s”', '已加入「%s」', '“%s”に追加しました', '“%s”에 추가됨', 'Ajouté à « %s »', 'Zu „%s“ hinzugefügt',
+       'Añadido a “%s”', 'Aggiunto a “%s”', 'เพิ่มไปยัง “%s” แล้ว', 'Dodano do „%s”', 'Добавлено в «%s»', 'Додано до «%s»'),
+    _t('Already in “%s”', '已在“%s”中', '已在「%s」中', 'すでに“%s”にあります', '이미 “%s”에 있음', 'Déjà dans « %s »', 'Bereits in „%s“',
+       'Ya está en “%s”', 'Già in “%s”', 'มีอยู่ใน “%s” แล้ว', 'Już jest w „%s”', 'Уже в «%s»', 'Уже в «%s»'),
     _t('Delete Playlists', '删除歌单', '刪除歌單', 'プレイリストを削除', '재생 목록 삭제', 'Supprimer des playlists', 'Playlists löschen',
        'Eliminar listas', 'Elimina playlist', 'ลบเพลย์ลิสต์', 'Usuń playlisty', 'Удалить плейлисты', 'Видалити плейлисти'),
     _t('No playlists', '没有歌单', '沒有歌單', 'プレイリストがありません', '재생 목록 없음', 'Aucune playlist', 'Keine Playlists',

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the Add to Playlist picker (patch/playlists.c pick mode, docs/modules/picker.md): the Playlists page in list mode under a
-navbar with Back and the title only, the first rows "New playlist" (a plus) and "Favorites" (a star), no count, then the playlists; one panel at rest and one with a row
-held down. Not pixel-exact AWTK.
+navbar with Back and the title only, the first rows "New playlist" (a plus) and "Favorites" (a star), no count, then the playlists; one panel at rest, one with a row
+held down and one with two recent playlists ("Recent · N tracks") after Favorites. Not pixel-exact AWTK.
 
   preview_picker.py WORKDIR OUT.png [--lang CODE]
 
@@ -20,7 +20,8 @@ def main():
     a = ap.parse_args()
     s = PI.Side(a.workdir, True, a.lang)
     panels = [('Add to Playlist: at rest', PI.playlists_grid(s, list_mode=True, row_pressed=-1, pick=True)),
-              ('A playlist row held down', PI.playlists_grid(s, list_mode=True, row_pressed=3, pick=True))]
+              ('A playlist row held down', PI.playlists_grid(s, list_mode=True, row_pressed=3, pick=True)),
+              ('Two recent playlists', PI.playlists_grid(s, list_mode=True, row_pressed=-1, pick=True, recent=('Late Night', 'Focus')))]
     pad, lab = 12, 20
     sheet = Image.new('RGB', (len(panels) * (320 + pad) + pad, 450 + lab + 2 * pad), (0x2A, 0x2A, 0x2A)); d = ImageDraw.Draw(sheet)
     for i, (title, im) in enumerate(panels):

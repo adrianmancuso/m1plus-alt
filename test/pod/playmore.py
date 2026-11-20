@@ -1217,14 +1217,15 @@ def run(ctx):
     expect(r[3] == [] and r[4] == ['msg_delsongfailed'], f'playback ended under the question: nothing is deleted ({r})')
     r = delete(answer=O['CONFIRM_YES'], queue=[('/mnt/mmc/' + 'd' * 800 + '.flac', 4)])
     expect(r == (STOP, [], None, [], ['msg_delsongfailed'], 0, 1), f'a path longer than the copy (PM_DEL_PATH, 768 bytes) cannot be told apart after the answer: no question, the failure message ({r})')
-    # the other rows: Add to playlist closes the sheet itself in stock (window_close at 0x47994c, then playlist_page); Speed / A-B open no dialog; none of them gets a handler of ours
+    # the other rows: Add to playlist closes the sheet itself in stock (window_close at 0x47994c, then playlist_page); Speed / A-B open no dialog and get no handler of ours
     m = PM(); alib(m)
     expect(m.handlers_of(m.rows[AB], CLICK) == [(STOCK_CLICK[ROWS[AB]], m.dialog)], 'A-B repeat keeps the stock handler alone')
     expect(m.handlers_of(m.rows[ADD], CLICK) == [(STOCK_CLICK['listitem2'], m.dialog), (PSYMS['pm_on_addpl'], m.dialog)],
            'Add to playlist: the stock handler first in the list (it closes the sheet itself), ours bound after it, so ours runs before it')
     fn, c = m.bound[(m.rows[ADD], CLICK)]
     ret = m.call(fn, a0=c, a1=0, count=200000); m.sync()
-    expect(ret == 0 and ('window_close', m.dialog) not in m.calls and m.live(ADD), f'Add to playlist on a card track: ours returns RET_OK and does nothing, stock\'s handler runs ({ret})')
+    expect(ret == 0 and ('window_open', 'm1plus_playlists') in m.calls and ('window_close', m.dialog) not in m.calls and m.live(ADD),
+           f'Add to playlist on a card track: ours tries the picker (test/pod/picker.py); where its page does not open (no Playlists page here) ours returns RET_OK and stock\'s handler runs ({ret})')
 
     # -- 7e. A Subsonic stream is no file: Add to playlist and Delete are dimmed, insensitive and their stock handlers do not run; a downloaded track keeps both ------
     def opac(m, i): return [c[2] for c in m.calls if c[0] == 'widget_set_opacity' and c[1] == m.rows[i]]

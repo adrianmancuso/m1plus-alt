@@ -18,6 +18,7 @@
 #include "picker.h"
 #include "home.h"
 #include "playlists.h"
+#include "entries.h"
 
 static struct {
     int on, done;
@@ -44,8 +45,7 @@ void picker_release(void) {
     memset(&pk, 0, sizeof pk);
 }
 
-int picker_open(int cls, unsigned count, const unsigned char *sel) {
-    void *list = *(void **)PDEQ_SHOWLIST;
+static int pk_open(int cls, void *list, unsigned count, const unsigned char *sel) {
     unsigned bytes = (count + 7) / 8;
     if (pk.on || !count || !list || deque_size(list) != count) return -1;
     pk.on = 1; /* from here picker_release undoes what is made */
@@ -67,17 +67,79 @@ int picker_open(int cls, unsigned count, const unsigned char *sel) {
     return 1;
 }
 
+int picker_open(int cls, unsigned count, const unsigned char *sel) {
+    return pk_open(cls, *(void **)PDEQ_SHOWLIST, count, sel);
+}
+
+int picker_open_one(int cls, void *rec) {
+    static const unsigned char one = 1;
+    void *d = rec ? so_row_deque(rec) : (void *)0;
+    int r = -1;
+    if (!d) return -1;
+    if (deque_size(d) == 1) r = pk_open(cls, d, 1, &one);
+    deque_destroy(d); /* (pk_open made its own copy) */
+    return r;
+}
+
+int picker_recent(int *ids, int max) {
+    unsigned n = 0, i = 0;
+    char *text = m1_read_file(PICKER_RECENT_FILE, 64, &n);
+    int got = 0, k;
+    while (text && i < n && got < max) {
+        long v = 0;
+        unsigned d = 0;
+        for (; i < n && text[i] >= '0' && text[i] <= '9' && d < 9; ++i, ++d) v = v * 10 + (text[i] - '0');
+        if (d && (i == n || text[i] == '\n')) { /* a whole line of digits: an id */
+            for (k = 0; k < got && ids[k] != (int)v; ++k) {
+            }
+            if (k == got) ids[got++] = (int)v;
+        }
+        while (i < n && text[i++] != '\n') {
+        }
+    }
+    free(text);
+    return got;
+}
+
+/* The playlist first, the others after it, at most PICKER_RECENT. */
+static void pk_note(int id) {
+    int ids[PICKER_RECENT], n = picker_recent(ids, PICKER_RECENT), k, kept = 1, w;
+    char text[PICKER_RECENT * 12 + 1];
+    w = snprintf(text, sizeof text, "%d\n", id);
+    for (k = 0; k < n && kept < PICKER_RECENT; ++k)
+        if (ids[k] != id) {
+            w += snprintf(text + w, sizeof text - (unsigned)w, "%d\n", ids[k]);
+            ++kept;
+        }
+    home_write_atomic(PICKER_RECENT_FILE, PICKER_RECENT_TMP, text);
+}
+
+/* Every marked song of the copy is already in the playlist (or Favourites). */
+static int pk_all_in(int fav, int playlist) {
+    unsigned i;
+    for (i = 0; i < pk.count; ++i)
+        if (pk.sel[i >> 3] & (1u << (i & 7))) {
+            void *rec = deque_at(pk.list, i);
+            if (!(fav ? checkFavExist(rec) : checkPlayListExist(rec, playlist))) return 0;
+        }
+    return 1;
+}
+
 /* The stock row handler's sequence: the selection into the stock vector, batch_add_file (duplicates skipped by checkPlayListExist; the rows of the copy get the new
  * ids), the message. A selection that cannot be made is msg_addfailed. PICKER_FAVOURITES is the stock Add button's Favourites choice (@0x5281c8):
- * batch_add_file(class, 0xf00a, list, vector, 0), then msg_addfavsuccess. */
-void picker_add(int playlist) {
-    int fav = playlist == PICKER_FAVOURITES;
+ * batch_add_file(class, 0xf00a, list, vector, 0). The message names the target (stock's msg_addplaylistsuccess / msg_addfavsuccess did not). */
+void picker_add(int playlist, const char *name) {
+    int fav = playlist == PICKER_FAVOURITES, all;
+    char msg[160];
     if (!pk.on || pk.done) return;
     pk.done = 1;
-    if (!so_selection(pk.count, pk.sel)) {
+    all = pk_all_in(fav, playlist);
+    if (!all && !so_selection(pk.count, pk.sel)) {
         pod_toast(TR("msg_addfailed"));
         return;
     }
-    batch_add_file(pk.cls, fav ? CLASS_FAV : CLASS_PLAYLISTS, pk.list, *(void **)SEL_VEC, fav ? 0 : playlist);
-    pod_toast(TR(fav ? "msg_addfavsuccess" : "msg_addplaylistsuccess"));
+    if (!all) batch_add_file(pk.cls, fav ? CLASS_FAV : CLASS_PLAYLISTS, pk.list, *(void **)SEL_VEC, fav ? 0 : playlist);
+    if (!fav) pk_note(playlist);
+    wk_subst(msg, sizeof msg, TR(all ? "Already in “%s”" : "Added to “%s”"), name ? name : "");
+    pod_toast(msg);
 }
