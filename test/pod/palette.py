@@ -12,6 +12,8 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 
 BG_FILE = '/mnt/data/m1plus/appearance-background'
 ACCENT_FILE = '/mnt/data/m1plus/appearance-accent'
+SCHEME_FILE = '/mnt/data/m1plus/appearance-scheme'
+SCHEME_TMP = SCHEME_FILE + '.tmp'
 KILL_SD, KILL_FLASH, BAD = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off', '/mnt/data/m1plus-bad'
 WHITE, BLACK = 0xffffffff, 0xff000000
 PAPER, INK = L.PAPER * 0x010101 | 0xff000000, L.INK * 0x010101 | 0xff000000
@@ -31,10 +33,11 @@ class LM(Machine):
     """The payload with Light Mode's state: mode is the saved file's text (None: no file)."""
     keep_cache = False
 
-    def __init__(self, mode=None, kill=False, bad=False, hook=False, acc=None):
+    def __init__(self, mode=None, kill=False, bad=False, hook=False, acc=None, scheme=None):
         super().__init__()
         if mode is not None: self.fs[BG_FILE] = mode
         if acc is not None: self.fs[ACCENT_FILE] = acc
+        if scheme is not None: self.fs[SCHEME_FILE] = scheme
         if kill: self.present.add(KILL_SD)
         if bad: self.present.add(BAD)
         self.unloads = 0
@@ -1248,4 +1251,218 @@ def own_roles_tests(ctx):
         expect(set(h) <= allowed, f'in the sources the {k} role colour is only where it is defined ({h})')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests]
+NIGHT = 1800000000 + 12 * 3600   # 20:00 (the harness' clock is 08:00 UTC, day)
+SCH_GREYS = [word((v, v, v, a)) for v in list(range(0, 256, 15)) + [0x1c, 0x2a, 0x33, 0x44, 0x80, 0xaa, 0xd4, 0xee, 0xff] for a in (255, 0x80)]
+SCH_HUES = [0xff2060ff, 0xff3a45ff, 0x80d1c840, 0xff6aa9c8, 0xff1e1c1c, 0xff201f1f, 0x00000000]
+
+
+def sch_lm(s, day=True, **kw):
+    """A machine with scheme s saved (bytes, or None: no file), by day (08:00) or by night (20:00)."""
+    m = LM(scheme=s, hook=True, **kw)
+    if not day: m.wall = NIGHT
+    return m
+
+
+def luminance(c):
+    ch = [v / 255 for v in c[:3]]
+    ch = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in ch]
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+
+
+def contrast(a, b):
+    la, lb = sorted((luminance(a), luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def scheme_map_tests(ctx):
+    """The riso schemes: pal_map and the hooks against tools/palette.py by day and by night; black is the paper, white the ink; the state calls answer the scheme's."""
+    expect = ctx.expect
+    expect(L.SCHEMES == ('classic', 'navy-coral', 'teal-sunflower', 'blue-orange', 'green-red', 'purple-yellow', 'burgundy-mint', 'black-pink', 'greyscale') and O['SCHEME_COUNT'] == len(L.SCHEMES) and O['SCHEME_GREY'] == 8,
+           'nine schemes in saved-digit order: Classic, the seven riso ones, Greyscale')
+    expect(L.SCHEME_PAPER == (0xf4, 0xf1, 0xea), 'the cream paper is #F4F1EA')
+    pal_map = lambda m, c: m.call(PSYMS['pal_map'], a0=c, count=20000)
+    bad = []
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            for c in SCH_GREYS + ROLE_WORDS + NEAR_WORDS + SCH_HUES:
+                if c >> 24 == 0: continue   # (the callers skip a clear colour first: ui_ink, the hooks)
+                want = word(L.map_colour(px(c), scheme=name, day=day))
+                got = pal_map(m, c)
+                if got != want: bad.append((name, day, hex(c), hex(got), hex(want)))
+            lo, hi = L.scheme_ends(name, day)
+            acc = L.scheme_accent(name)
+            expect(pal_map(m, BLACK) == word(lo + (255,)) and pal_map(m, WHITE) == word(hi + (255,)) and lo == (L.SCHEME_PAPER if day else L.scheme_ends(name, False)[0]) and hi == (L.scheme_ends(name, True)[1] if day else L.SCHEME_PAPER),
+                   f'{name} {"day" if day else "night"}: black is {"the cream" if day else "the night paper"} {lo}, white {"the ink" if day else "the cream"} {hi}')
+            st = [m.call(PSYMS[f], count=20000) for f in ('pal_active', 'pal_light', 'pal_scheme', 'pal_scheme_on')]
+            ac = m.call(PSYMS['pal_accent'], count=20000)
+            expect(st == [1, int(day), s, s] and ac and m.call(PSYMS['pal_accent_color'], a0=ac, count=2000) == word(acc + (255,)) and m.call(PSYMS['pal_fill'], count=2000) == word(acc + (255,)),
+                   f'{name} {"day" if day else "night"}: active, pal_light {int(day)}, the scheme saved and on, pal_accent truthy ({ac}) and its colour and pal_fill the scheme accent {acc} ({st})')
+            sty = m.style(color=BLACK)
+            expect(m.color(sty) == word(lo + (255,)) and m.gradient(m.style(grads=[BLACK, WHITE]))[1] == [word(lo + (255,)), word(hi + (255,))] and m.call(PSYMS['ui_ink'], a0=0, count=20000) == 0,
+                   f'{name} {"day" if day else "night"}: style_get_color and style_get_gradient answer the remap, a clear colour stays clear')
+    expect(not bad, f'pal_map under every riso scheme, by day and by night, on greys, role, near-miss and hue colours matches the model ({bad[:4]})')
+    # the secondary grey keeps 4.5:1 on cream by day: #AAAAAA maps as SCHEME_SUB
+    expect(L.map_colour((0xaa,) * 3 + (255,), scheme='navy-coral') == L.map_colour((0xd4,) * 3 + (255,), scheme='navy-coral') and L.map_colour((0xaa,) * 3, scheme='navy-coral', day=False) != L.map_colour((0xd4,) * 3, scheme='navy-coral', day=False),
+           'by day #AAAAAA maps as #D4D4D4; by night as itself')
+    # the roles: a pressed row is the mapped black tinted by the scheme accent; the progress fill the accent
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            lo, acc = L.scheme_ends(name, day)[0], L.scheme_accent(name)
+            row = L.mix_tint(lo, acc)
+            got = (pal_map(m, word(rgba(L.ROLE_PRESS_ROW))), pal_map(m, word(rgba(L.ROLE_PROGRESS, 0xeb))), pal_map(m, word(rgba(L.ROLE_PRESS_PILL))))
+            expect(got == (word(row + (255,)), word(acc + (0xeb,)), word(L.mix_tint(L.remap(L.PILL, name, day), acc) + (255,))),
+                   f'{name} {"day" if day else "night"}: the pressed row is mix(mapped black, accent) {row}, the progress fill the accent, the pressed pill the mapped pill tinted')
+    # the cost of a style call under a scheme
+    m = LM(scheme=b'1\n', hook=True).count()
+    s = m.style(color=ROLE_WORDS[0]); m.color(s); m.color(s); c_role = m.icount
+    m.color(m.style(color=WHITE)); c_plain = m.icount
+    expect(c_role < 1200 and c_plain < 1200, f'a style call under a scheme costs {c_role} instructions on a role colour and {c_plain} on any other')
+    print(f'  style call under a scheme: {c_role} (role colour), {c_plain} (other)')
+
+
+def scheme_setting_tests(ctx):
+    """The saved scheme: Classic when absent or invalid, overrides Background and Accent, saved atomically and applied at once; the kill switch, the bad-boot note and the clock."""
+    expect = ctx.expect
+    pal_map = lambda m, c: m.call(PSYMS['pal_map'], a0=c, count=20000)
+    on = lambda m: m.call(PSYMS['pal_scheme_on'], count=20000)
+    # Classic: no file, 0, or anything invalid behaves as before, with Background and Accent applying
+    for data in (None, b'0\n', b'0', b'9', b'9\n', b'x', b'', b'11', b'-1'):
+        m = LM(b'2\n', acc=b'1\n', scheme=data, hook=True)
+        got = [pal_map(m, c) for c in ROLE_WORDS + NEAR_WORDS]
+        expect(m.call(PSYMS['pal_scheme'], count=20000) == 0 and on(m) == 0 and got == [word(L.map_colour(px(c), 'light', 'red')) for c in ROLE_WORDS + NEAR_WORDS] and m.call(PSYMS['pal_accent'], count=20000) == 1
+               and m.fs.get(SCHEME_FILE) == data, f'saved scheme {data!r}: Classic, Light + Red as before, and reading writes nothing')
+        m = LM(scheme=data, hook=True)
+        expect(m.call(PSYMS['pal_active'], count=20000) == 0 and m.timers == [] and pal_map(m, BLACK) == BLACK, f'saved scheme {data!r} with Black + Neutral: inactive, no timer')
+    # a scheme overrides the Background and the Accent
+    for bg, acc in ((b'2\n', None), (b'1\n', b'3\n'), (b'3\n', b'6\n')):
+        m = LM(bg, acc=acc, scheme=b'4\n', hook=True)
+        expect([pal_map(m, c) for c in SCH_GREYS + ROLE_WORDS] == [word(L.map_colour(px(c), scheme='green-red')) for c in SCH_GREYS + ROLE_WORDS] and m.call(PSYMS['pal_background'], count=20000) == 1,
+               f'background {bg!r}, accent {acc!r} under Green & Red: the scheme mapping')
+    m = LM(b'1\n', acc=b'3\n', scheme=b'4\n', hook=True)
+    pal_map(m, BLACK)
+    r = m.call(PSYMS['pal_scheme_set'], a0=0, count=2000000)
+    calls = list(m.calls)
+    expect(r == 0 and m.fs[SCHEME_FILE] == b'0\n' and ('rename', SCHEME_TMP, SCHEME_FILE) in calls and m.unloads == 1 and ('widget_invalidate_force', m.wm) in calls, 'pal_scheme_set(0): saved atomically, applied (images dropped, repaint)')
+    expect(m.call(PSYMS['pal_background'], count=20000) == 2 and pal_map(m, BLACK) == word(L.map_colour((0, 0, 0, 255), 'tinted', 'green')) and on(m) == 0, 'and Tinted + Green are back')
+    r = m.call(PSYMS['pal_scheme_set'], a0=4, count=2000000)
+    expect(r == 4 and m.fs[SCHEME_FILE] == b'4\n' and m.unloads == 2 and pal_map(m, BLACK) == word(L.map_colour((0, 0, 0, 255), scheme='green-red')) and on(m) == 4, 'pal_scheme_set(4): saved and applied at once')
+    m.call(PSYMS['pal_scheme_set'], a0=4, count=2000000)
+    expect(m.unloads == 2 and len(m.timers) == 1, 'choosing the scheme it is in drops nothing; one timer')
+    for bad in (-1, 9, 99):
+        before = (m.fs[SCHEME_FILE], m.unloads)
+        expect(m.call(PSYMS['pal_scheme_set'], a0=bad & 0xffffffff, count=2000000) == 0xffffffff and (m.fs[SCHEME_FILE], m.unloads) == before and on(m) == 4, f'pal_scheme_set({bad}) is refused and changes nothing')
+    m = LM(scheme=b'1\n', hook=True); m.fail.add(('write', SCHEME_TMP))
+    expect(m.call(PSYMS['pal_scheme_set'], a0=3, count=2000000) == 0xffffffff and m.fs.get(SCHEME_FILE) == b'1\n' and on(m) == 1 and m.unloads == 0, 'a failed write changes neither the file nor the scheme')
+    m = LM(hook=True)
+    m.call(PSYMS['pal_scheme_set'], a0=6, count=2000000)
+    n = LM(scheme=m.fs[SCHEME_FILE], hook=True)
+    expect(on(n) == 6 and len(m.timers) == 1 and len(n.timers) == 1, 'a saved scheme is the scheme of the next boot; a scheme arms the one timer')
+    m.call(PSYMS['pal_scheme_set'], a0=0, count=2000000)
+    expect(('timer_remove', 0x777) in m.calls and m.call(PSYMS['pal_active'], count=20000) == 0, 'Classic with Black + Neutral ends the timer, the palette inactive')
+    # the kill switch and the bad-boot note: Classic, inactive (the saved choice stays)
+    for kw in ({'kill': True}, {'bad': True}):
+        m = LM(b'2\n', acc=b'1\n', scheme=b'2\n', hook=True, **kw)
+        expect(m.call(PSYMS['pal_active'], count=20000) == 0 and on(m) == 0 and m.call(PSYMS['pal_scheme'], count=20000) == 2 and m.color(m.style(color=BLACK)) == BLACK,
+               f'{kw}: inactive, the hooks stock\'s, the saved scheme kept')
+    # day and night: the tick at LIGHT_UNTIL changes the mapping
+    m = LM(scheme=b'3\n', hook=True); m.wall = 1800000000 + 10 * 3600 + 59 * 60 + 30   # 18:59:30
+    expect(pal_map(m, BLACK) == word(L.SCHEME_PAPER + (255,)) and m.call(PSYMS['pal_light'], count=20000) == 1, 'Federal Blue at 18:59: cream, pal_light 1')
+    cb = m.timers[0][0]
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 0, 'a tick inside the day changes nothing')
+    m.wall += 60
+    r = m.call(cb, a0=0, count=200000)
+    expect(r == O['RET_REPEAT'] and m.unloads == 1 and m.call(PSYMS['pal_light'], count=20000) == 0 and pal_map(m, BLACK) == word(L.scheme_ends('blue-orange', False)[0] + (255,)), 'at 19:00 the tick reports the change: images dropped, black is the night paper, pal_light 0')
+    m.wall += 12 * 3600
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 2 and pal_map(m, BLACK) == word(L.SCHEME_PAPER + (255,)), 'and at 7:00 cream again')
+    m.present.add(KILL_SD)
+    m.call(cb, a0=0, count=200000)
+    expect(m.unloads == 3 and m.call(PSYMS['pal_active'], count=20000) == 0, 'the kill switch appearing turns it off at the next tick')
+    # Greyscale: images-only; styles pass through and Background / Accent are ignored
+    m = LM(b'2\n', acc=b'1\n', scheme=b'8\n', hook=True)
+    st = [m.call(PSYMS[f], count=20000) for f in ('pal_active', 'pal_light', 'pal_accent', 'pal_background', 'pal_scheme_on')]
+    expect(st == [1, 0, 0, 0, 8] and all(pal_map(m, c) == c for c in SCH_GREYS + ROLE_WORDS) and m.color(m.style(color=ROLE_WORDS[0])) == ROLE_WORDS[0] and len(m.timers) == 1,
+           f'Greyscale: active (images), the styles pass through, Light and the accent ignored ({st})')
+    g = glyph_image()
+    expect(m.image('np_play', 16, 16, g) == g and m.image('pod_ic_songs', 16, 16, g) == g, 'Greyscale: the theme\'s images are as they are')
+
+
+def scheme_image_tests(ctx):
+    """The image hook under the riso schemes: tinted names, glyphs (the scheme's glyph colour), fills (its accent), the pressed card and Shuffle disc (the remapped surface) and every other small image
+    (Light's rule between the scheme's ends) against the model, by day and by night; and the contrast the colours keep."""
+    expect = ctx.expect
+    from PIL import Image
+    d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
+    names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
+    glyphs = [n for n in names if L.accent_kind(n) == 'glyph']
+    tinted = list(L.ACCENT_ALL) + glyphs[::8]
+    bad, n = [], 0
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            m = sch_lm(b'%d\n' % s, day)
+            for nm in tinted:
+                im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+                if im.width * im.height > (6000 if s == 1 else 1200): continue   # (every image under the first scheme; the small ones under the rest)
+                heap0 = m.heap
+                got = m.image(nm, im.width, im.height, list(im.getdata()))
+                m.heap = heap0
+                n += 1
+                if got != list(L.render_image(nm, im, scheme=name, day=day).getdata()): bad.append((name, day, nm))
+    expect(not bad, f'{n} tinted images under the riso schemes, day and night, match the model pixel for pixel ({bad[:4]})')
+    for s, name in enumerate(L.SCHEMES[1:-1], 1):
+        for day in (True, False):
+            acc, gl = L.scheme_accent(name), L.scheme_glyph(name, day)
+            m = sch_lm(b'%d\n' % s, day)
+            g = glyph_image()
+            out = {p[:3] for p in m.image('pod_ic_songs', 16, 16, g) if p[3]}
+            fill = {p[:3] for p in m.image('pod_check', 4, 4, [(238, 238, 236, 255)] * 16)}
+            card = {p[:3] for p in m.image('pod_cd_mid_down', 4, 4, [(0x30, 0x30, 0x32, 255)] * 16)}
+            expect(out == {gl} and fill == {acc} and card == {L.mix_tint(L.remap(L.CARD, name, day), acc)} and gl == L.scheme_glyph(name, day) and gl == tuple(O[f'SCH{s}_{"GDAY" if day else "GNIGHT"}'].to_bytes(3, 'big')),
+                   f'{name} {"day" if day else "night"}: a row glyph is the glyph colour {gl}, a fill the accent {acc}, the pressed card the mapped card tinted')
+    im = Image.open(os.path.join(d, 'ah_shuffle_down.png')).convert('RGBA')
+    out = {p[:3] for p in L.render_image('ah_shuffle_down', im, scheme='navy-coral').getdata() if p[3] == 255}
+    expect(L.mix_tint(L.remap(L.SHUF, 'navy-coral', True), L.scheme_accent('navy-coral')) in out and L.remap((255, 255, 255), 'navy-coral', True) in out, 'the pressed Shuffle disc by day: the cream disc tinted, the glyph the ink')
+    g = glyph_image()
+    lo, hi = L.scheme_ends('navy-coral', True)
+    expect(sch_lm(b'1\n').image('np_play', 16, 16, g) == [hi + (255,) if p[3] else p for p in g], 'by day a white glyph becomes the ink')
+    expect(L.render_image('np_play', Image.new('RGBA', (2, 2), (255, 255, 255, 255)), 'light', 'red') == L.flip_image('np_play', Image.new('RGBA', (2, 2), (255, 255, 255, 255))), 'Classic Light is the flip as before')
+    # the image hook's cost under a scheme on a name it does not tint
+    m = LM(scheme=b'1\n').count()
+    n0 = m.icount; m.image('np_play', 2, 2, [(0, 0, 0, 0)] * 4); c = m.icount - n0
+    print(f'  hook on an untinted image under a scheme: {c} instructions')
+    # contrast: the ink and the secondary grey on the paper keep 4.5:1, the glyph colour 3:1
+    rows = []
+    for name in L.SCHEMES[1:-1]:
+        for day in (True, False):
+            paper = L.map_colour((0, 0, 0), scheme=name, day=day)
+            ink_, sub = L.map_colour((255, 255, 255), scheme=name, day=day), L.map_colour((0xaa,) * 3, scheme=name, day=day)
+            k = (contrast(ink_, paper), contrast(sub, paper), contrast(L.scheme_glyph(name, day), paper))
+            rows.append(k)
+            expect(k[0] >= 4.5 and k[1] >= 4.5 and k[2] >= 3, f'{name} {"day" if day else "night"}: ink {k[0]:.2f}, secondary {k[1]:.2f}, glyph {k[2]:.2f} on the paper')
+    print('  contrast (ink, secondary, glyph) minimum: ' + ', '.join(f'{min(r[i] for r in rows):.2f}' for i in range(3)))
+
+
+def scheme_light_tests(ctx):
+    """Every other small image of the tree under a riso scheme (by day and by night) follows Light's rule between the scheme's ends, as the model says."""
+    expect = ctx.expect
+    from PIL import Image
+    d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
+    names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
+    for s, name, day in ((1, 'navy-coral', True), (5, 'purple-yellow', False)):
+        m = sch_lm(b'%d\n' % s, day)
+        bad = []
+        for nm in names:
+            if L.accent_kind(nm): continue
+            im = Image.open(os.path.join(d, nm + '.png')).convert('RGBA')
+            if im.width * im.height > 4000: continue
+            heap0 = m.heap
+            got = m.image(nm, im.width, im.height, list(im.getdata()))
+            m.heap = heap0
+            if got != list(L.render_image(nm, im, scheme=name, day=day).getdata()): bad.append(nm)
+        expect(not bad, f'{name} {"day" if day else "night"}: the other images follow Light\'s rule between the scheme\'s ends ({bad[:4]})')
+
+
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests]

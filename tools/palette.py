@@ -10,6 +10,10 @@ patch/offsets.inc (LIGHT_*), the name lists are below and pod.py writes them int
   flip(c)               a colour (r, g, b) or (r, g, b, a): neutral colours (channels within LIGHT_SPREAD) flip per channel, black to LIGHT_PAPER and white to LIGHT_INK, alpha kept
   image_flips(name, im) whether the image of that file name is flipped, and how: None (kept), 'glyph' (every pixel, no colour in it and mostly glyph) or 'whole' (a plate or card of ours)
   flip_image(name, im)  the image as the device shows it in Light Mode
+  remap(c, scheme, day) a riso scheme's mapping of a neutral colour (SCHEMES; cream paper by day, the scheme's dark paper by night), the others as they are
+
+The scheme (SCHEMES, the saved digit is the position) overrides the background and the accent: 'classic' leaves them as they are, a riso scheme maps every neutral colour between its
+paper and its ink (scheme_ends) and takes its own accent and glyph colour, 'greyscale' leaves the theme's colours and images as Black + Neutral does (its covers are a later step).
 
 An image is the theme's only when its name is a plain asset name (no '/' and no ':'): covers by path or URL never are. Album art, covers, wallpapers, photos and videos are never changed.
 """
@@ -163,12 +167,72 @@ def not_role(c):
     return tuple(c)
 
 
-def map_colour(c, bg='black', ac='neutral', cover=False):
+SCHEMES = ('classic', 'navy-coral', 'teal-sunflower', 'blue-orange', 'green-red', 'purple-yellow', 'burgundy-mint', 'black-pink', 'greyscale')   # patch/palette.c pal_scheme; offsets.inc SCHn_*
+SCHEME_PAPER = tuple(C['SCHEME_PAPER'].to_bytes(3, 'big'))   # the cream: the day paper, the night ink
+SUB_FROM, SUB = C['SCHEME_SUB_FROM'], C['SCHEME_SUB']   # by day the secondary grey (#AAAAAA) maps as SUB, so it keeps 4.5:1 on cream
+
+
+def _sch(scheme, field):
+    return tuple(C[f'SCH{SCHEMES.index(scheme)}_{field}'].to_bytes(3, 'big'))
+
+
+def riso(scheme):
+    """A riso scheme (not Classic, not Greyscale)."""
+    return scheme in SCHEMES[1:-1]
+
+
+def scheme_accent(scheme):
+    """A riso scheme's accent (its fills, the pressed tints)."""
+    return _sch(scheme, 'ACC')
+
+
+def scheme_glyph(scheme, day=True):
+    """A riso scheme's row glyph colour (darker by day so it keeps 3:1 on cream)."""
+    return _sch(scheme, 'GDAY' if day else 'GNIGHT')
+
+
+def scheme_ends(scheme, day=True):
+    """(lo, hi): where black and white go under a riso scheme. By day the cream paper and the scheme's ink, by night its dark paper and the cream."""
+    assert riso(scheme), scheme
+    return (SCHEME_PAPER, _sch(scheme, 'INK')) if day else (_sch(scheme, 'NIGHT'), SCHEME_PAPER)
+
+
+def mix_v(v, lo, hi):
+    """One channel between the ends: lo + v * (hi - lo) / 255 with C's truncation (patch/palette.c mix_v); with LIGHT_PAPER and LIGHT_INK it is flip_v."""
+    return lo + _trunc(v * (hi - lo), 255)
+
+
+def remap(c, scheme, day=True):
+    """patch/palette.c pal_remap: a neutral colour (3 or 4 channels) per channel between the scheme's ends, alpha kept (by day the secondary grey first becomes SUB); a hue as it is."""
+    if not neutral(c): return tuple(c)
+    lo, hi = scheme_ends(scheme, day)
+    rgb = tuple(c[:3])
+    if day and rgb == (SUB_FROM,) * 3: rgb = (SUB,) * 3
+    return tuple(mix_v(v, l, h) for v, l, h in zip(rgb, lo, hi)) + tuple(c[3:])
+
+
+def scheme_role(c, scheme, day=True):
+    """The role step under a riso scheme: role() with the scheme's accent, a pressed surface its remapped rest colour tinted."""
+    acc = scheme_accent(scheme)
+    rgb = (c[0] << 16) | (c[1] << 8) | c[2]
+    if rgb in PRESS_SURFACES: new = mix_tint(remap(PRESS_SURFACES[rgb], scheme, day), acc)
+    elif rgb in (ROLE_PROGRESS, ROLE_FILL): new = acc
+    elif rgb == ROLE_SHEET_PRESS: return acc + (SHEET_A,)
+    else: return None
+    return new + tuple(c[3:])
+
+
+def map_colour(c, bg='black', ac='neutral', cover=False, scheme='classic', day=True):
     """patch/palette.c pal_map: an accent's role colour first (a pressed row, the Now Playing progress fill: they are chromatic or accent-coloured, so the background never touches
     them), else the background (black: as it is; tinted: a dark neutral colour takes WASH % of the accent, except while a cover-tinted page shows its tone (cover=True); light: the neutral flip). Pure: its callers (ui_ink, the hooks) skip a clear colour (alpha 0) first, since stock tests for it (see ink).
-    Black + neutral is the identity: the hooks are pass-throughs."""
-    assert bg in BACKGROUNDS and ac in ACCENTS, (bg, ac)
+    Black + neutral is the identity: the hooks are pass-throughs. A scheme other than 'classic' overrides bg and ac: a riso one maps by remap (day: the device clock's Light Auto) with
+    its accent's roles, 'greyscale' leaves every colour."""
+    assert bg in BACKGROUNDS and ac in ACCENTS and scheme in SCHEMES, (bg, ac, scheme)
     c = tuple(c)
+    if scheme == 'greyscale': return c
+    if riso(scheme):
+        r = scheme_role(c, scheme, day)
+        return remap(c, scheme, day) if r is None else r
     r = role(c, ac, bg)
     if r is not None: return r
     return flip(c) if bg == 'light' else wash(c, ac) if bg == 'tinted' and not cover else c
@@ -194,15 +258,17 @@ def image_flips(name, im):
     return 'glyph' if solid * SURFACE < w * h else None
 
 
-def flip_image(name, im):
-    """The image the device shows in Light Mode: straight alpha, every flipped pixel mapped per channel."""
+def flip_image(name, im, ends=None):
+    """The image the device shows in Light Mode: straight alpha, every flipped pixel mapped per channel. ends (lo, hi): a riso scheme's (scheme_ends) instead of Light's
+    (patch/palette.c light_image; images take no secondary-grey step)."""
     from PIL import Image
     how = image_flips(name, im)
     im = im.convert('RGBA')
     if how is None: return im
+    lo, hi = ends or ((PAPER,) * 3, (INK,) * 3)
     out = Image.new('RGBA', im.size)
-    every = lambda p: tuple(flip_v(v) for v in p[:3]) + tuple(p[3:])   # a glyph image: every channel (nothing in it has colour but pixels too faint to count)
-    out.putdata([(every(p) if how == 'glyph' else flip(p)) if p[3] else p for p in im.getdata()])   # (a clear pixel's colour is not seen: the device leaves it)
+    every = lambda p: tuple(mix_v(v, l, h) for v, l, h in zip(p[:3], lo, hi)) + tuple(p[3:])   # a glyph image: every channel (nothing in it has colour but pixels too faint to count)
+    out.putdata([(every(p) if how == 'glyph' or neutral(p) else p) if p[3] else p for p in im.getdata()])   # (a clear pixel's colour is not seen: the device leaves it)
     return out
 
 
@@ -215,16 +281,19 @@ def _clamp255(v):
     return max(0, min(255, v))
 
 
-def accent_pixel(kind, p, ac, bg='black'):
-    """One straight pixel (r, g, b, a) of an accent-tinted image (kind 'fill', 'switch', 'press' or 'disc'); a clear pixel and the alpha stay. patch/palette.c pal_accent_image is the C twin."""
+def accent_pixel(kind, p, ac, bg='black', scheme='classic', day=True):
+    """One straight pixel (r, g, b, a) of an accent-tinted image (kind 'fill', 'switch', 'press' or 'disc'); a clear pixel and the alpha stay. patch/palette.c pal_accent_image is the C twin.
+    Under a riso scheme the accent is the scheme's, a glyph its glyph colour, and the pressed surfaces (card, Shuffle disc and its white glyph) are remapped first."""
     if not p[3]: return p
-    acc = ACCENT_RGB[ac]
-    if kind == 'press': return card_press(ac, bg) + (p[3],)
-    if kind == 'glyph': return acc + (p[3],)
-    if kind == 'shufdown':   # the pressed Shuffle disc: the disc (#44) becomes the tinted rest disc, the white glyph stays, between by lightness
-        base = press_of(SHUF, ac, bg)
+    sch = riso(scheme)
+    acc = scheme_accent(scheme) if sch else ACCENT_RGB[ac]
+    if kind == 'press': return (mix_tint(remap(CARD, scheme, day), acc) if sch else card_press(ac, bg)) + (p[3],)
+    if kind == 'glyph': return (scheme_glyph(scheme, day) if sch else acc) + (p[3],)
+    if kind == 'shufdown':   # the pressed Shuffle disc: the disc (#44) becomes the tinted rest disc, the white glyph stays (a riso scheme: white remapped), between by lightness
+        base = mix_tint(remap(SHUF, scheme, day), acc) if sch else press_of(SHUF, ac, bg)
+        top = remap((255, 255, 255), scheme, day) if sch else (255,) * 3
         u = _clamp255((p[0] - SHUF_DOWN_R) * 255 // (255 - SHUF_DOWN_R))
-        return tuple(b + (255 - b) * u // 255 for b in base) + (p[3],)
+        return tuple(b + _trunc((e - b) * u, 255) for b, e in zip(base, top)) + (p[3],)
     if kind == 'tile':   # the square (#1C1C1E) stays, white goes to the accent, the glyph's antialiased edge blends by lightness (of the red channel)
         u = _clamp255((p[0] - TILE_R) * 255 // (255 - TILE_R))
         return tuple(t + _trunc((a - t) * u, 255) for t, a in zip(TILE, acc)) + (p[3],)
@@ -271,11 +340,15 @@ def dl_ring_pixel(p, ac):
     return tuple((DL_TRACK_R * (255 - f) + c * f + 127) // 255 for c in ACCENT_RGB[ac]) + (p[3],)
 
 
-def render_image(name, im, bg='black', ac='neutral'):
+def render_image(name, im, bg='black', ac='neutral', scheme='classic', day=True):
     """The image the device shows (RGBA, straight alpha) for a background and an accent: an accent-tinted image is tinted instead of flipped (the accent wins over Light; its press piece follows the Tinted
-    background), else Light's rule, else on Tinted a surface's dark neutral pixels take WASH % of the accent."""
-    kind = accent_kind(name) if ac != 'neutral' else None
+    background), else Light's rule, else on Tinted a surface's dark neutral pixels take WASH % of the accent. A riso scheme: its accent's tint, else Light's rule between its ends;
+    Greyscale: the theme's images as they are."""
+    if scheme == 'greyscale': return im.convert('RGBA')
+    sch = riso(scheme)
+    kind = accent_kind(name) if ac != 'neutral' or sch else None
     if kind is None:
+        if sch: return flip_image(name, im, scheme_ends(scheme, day))
         if bg == 'light': return flip_image(name, im)
         if bg != 'tinted' or ac == 'neutral' or not tint_surface(name): return im.convert('RGBA')
         from PIL import Image
@@ -286,7 +359,7 @@ def render_image(name, im, bg='black', ac='neutral'):
     from PIL import Image
     im = im.convert('RGBA')
     out = Image.new('RGBA', im.size)
-    out.putdata([accent_pixel(kind, p, ac, bg) for p in im.getdata()])
+    out.putdata([accent_pixel(kind, p, ac, bg, scheme, day) for p in im.getdata()])
     return out
 
 

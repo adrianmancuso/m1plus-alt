@@ -1660,6 +1660,50 @@
 #define ACC_QPILL 0x2c2c2e /* the Queue's off buttons' rest colour (QP_PILL_OFF) */
 #define ACC_SHUF 0x2a2a2a /* the album page's Shuffle disc at rest (ah_shuffle); pressed ah_shuffle_down is ACC_SHUF_DOWN_R grey with the white glyph */
 #define ACC_SHUF_DOWN_R 68
+/* The schemes (patch/palette.c, tools/palette.py SCHEMES; docs/modules/accent.md "Schemes"): the saved digit 0 Classic (Background and Accent apply), 1 .. 7 the riso schemes, SCHEME_GREY
+ * Greyscale. A riso scheme maps a neutral colour of lightness v per channel to lo + v * (hi - lo) / 255 (C truncation): by day lo SCHEME_PAPER (cream) and hi the scheme's day ink, by night
+ * lo its night paper and hi SCHEME_PAPER (Light Auto's clock). Fills take SCHn_ACC, row glyphs SCHn_GDAY / SCHn_GNIGHT. By day the secondary grey SCHEME_SUB_FROM (tools/pod_roles.py
+ * SUB_RGB, #AAAAAA) maps as SCHEME_SUB, so it keeps 4.5:1 on cream. Values from Liner's riso pairings (0xRRGGBB). */
+#define SCHEME_COUNT 9
+#define SCHEME_GREY 8
+#define SCHEME_PAPER 0xf4f1ea
+#define SCHEME_SUB_FROM 0xaa
+#define SCHEME_SUB 0xd4
+#define SCH1_INK 0x1f2a6b /* Navy & Coral */
+#define SCH1_NIGHT 0x141b47
+#define SCH1_ACC 0xff5a8a
+#define SCH1_GDAY 0xd0406c
+#define SCH1_GNIGHT 0xff5a8a
+#define SCH2_INK 0x005a5f /* Teal & Sunflower */
+#define SCH2_NIGHT 0x002e30
+#define SCH2_ACC 0xffb511
+#define SCH2_GDAY 0x8f650a
+#define SCH2_GNIGHT 0xffb511
+#define SCH3_INK 0x395080 /* Federal Blue & Fluoro Orange */
+#define SCH3_NIGHT 0x151e30
+#define SCH3_ACC 0xff7477
+#define SCH3_GDAY 0xb05052
+#define SCH3_GNIGHT 0xff7477
+#define SCH4_INK 0x005d33 /* Green & Bright Red */
+#define SCH4_NIGHT 0x003b20
+#define SCH4_ACC 0xf15060
+#define SCH4_GDAY 0xc1404d
+#define SCH4_GNIGHT 0xf4707d
+#define SCH5_INK 0x5b4681 /* Purple & Yellow */
+#define SCH5_NIGHT 0x29203a
+#define SCH5_ACC 0xffe800
+#define SCH5_GDAY 0x7a6f00
+#define SCH5_GNIGHT 0xffe800
+#define SCH6_INK 0x753f5c /* Burgundy & Mint */
+#define SCH6_NIGHT 0x331b28
+#define SCH6_ACC 0x82d8d5
+#define SCH6_GDAY 0x467573
+#define SCH6_GNIGHT 0x82d8d5
+#define SCH7_INK 0x1a1a1a /* Black & Fluoro Pink */
+#define SCH7_NIGHT 0x121212
+#define SCH7_ACC 0xff48b0
+#define SCH7_GDAY 0xbf3684
+#define SCH7_GNIGHT 0xff48b0
 #define STYLE_COLOR_GRADIENT_RET 0x65a050
 #define BITMAP_PREMULTI 16 /* AWTK's BITMAP_FLAG_PREMULTI_ALPHA in bitmap_t's u16 flags @0xc */
 
