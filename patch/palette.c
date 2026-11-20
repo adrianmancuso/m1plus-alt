@@ -44,6 +44,7 @@ static struct {
     const char *name;
     int exempt;
     int cover; /* the cover-tinted page the top window is: PAL_COVER_* (0 none) */
+    int regrey; /* the last change of the effective state turned Greyscale on or off (pal_regrey) */
 } pal __attribute__((section(".scratch")));
 
 static const char keep_names[] = LIGHT_KEEP;
@@ -273,6 +274,7 @@ static int pal_refresh(void) {
         }
     }
     if (key == pal.key) return 0;
+    pal.regrey = (pal.key >> 8 == SCHEME_GREY) != (key >> 8 == SCHEME_GREY);
     pal.key = key;
     sch = key >> 8;
     if (key & 1 &&
@@ -339,6 +341,8 @@ int pal_scheme_on(void) {
     return PK_SCH;
 }
 
+int pal_regrey(void) { return pal.regrey; }
+
 /* The scheme setting: saved atomically first (a failed save changes nothing), then applied at once, as the accent. */
 int pal_scheme_set(int s) {
     if (s < 0 || s >= SCHEME_COUNT) return -1;
@@ -396,7 +400,15 @@ unsigned pal_not_role(unsigned c) {
     return c;
 }
 
-unsigned pal_tone(unsigned tone) { return pal_light() ? NP_NEUTRAL : pal_not_role(tone); }
+/* Rec. 601 luma of a colour's r, g and b (tools/palette.py grey_pixel): (r * 299 + g * 587 + b * 114) / 1000. */
+static unsigned luma(unsigned r, unsigned g, unsigned b) { return (r * 299 + g * 587 + b * 114) / 1000; }
+
+unsigned pal_tone(unsigned tone) {
+    if (pal_light()) return NP_NEUTRAL;
+    if (PK_SCH == SCHEME_GREY) /* Greyscale: the tone's grey, as the greyed cover's */
+        tone = (tone & 0xff000000u) | luma(tone & 255, tone >> 8 & 255, tone >> 16 & 255) * 0x010101u;
+    return pal_not_role(tone);
+}
 
 /* ---------------------------------------------------------------------------
  * The style hooks.
@@ -595,9 +607,9 @@ static int in_names(const char *s, const char *list) {
 }
 
 /* The accent's tint of a decoded image (tools/palette.py accent_pixel is the model): kind 0 FILL (slider and progress fills, the check, the playing wave: a pixel as light as the fill or
- * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1C1C1E square stays, white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
- * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. */
-static void accent_image(int kind, void *bitmap, unsigned acc) {
+ * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1C1C1E square stays (a riso scheme: remapped), white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
+ * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. Out of line: an image it does not tint pays for none of its registers (the 3700 budget). */
+static __attribute__((noinline)) void accent_image(int kind, void *bitmap, unsigned acc) {
     static const unsigned char at[4][4] = BITMAP_RGBA_AT;
     unsigned format, stride, y, x, i, a, v[3], t, card, top, w4, h4;
     int premul;
@@ -617,8 +629,11 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                     : PK_TINT ? pal_mix(card, acc, ACC_WASH)
                               : card,
                     acc); /* (Tinted: the tinted surface, tinted again; a riso scheme: the remapped surface) */
-    top = PAL_RISO ? pal_remap(0xffffffffu)
-                   : 0xffffffffu; /* the Shuffle disc's glyph: white, or under a riso scheme white remapped */
+    top =
+        kind == 5
+            ? RGBW(ACC_TILE)
+            : 0xffffffffu; /* the fixed end: the Library tile's square (#1C1C1E), or the Shuffle disc's glyph (white); under a riso scheme remapped */
+    if (PAL_RISO) top = pal_remap(top);
     for (y = 0; y < h4; ++y)
         for (p = px + y * stride, x = 0; x < w4; ++x, p += 4) {
             a = p[o[3]];
@@ -662,8 +677,8 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                 t = v[0] <= lo ? 0 : (v[0] - lo) * 255 / (255 - lo);
                 if (t > 255) t = 255;
                 for (i = 0; i < 3; ++i) {
-                    int e = kind == 3 ? (int)lo : (int)(RGBW(ACC_TILE) >> (8 * i) & 255),
-                        c = (int)(acc >> (8 * i) & 255), dv = (c - e) * (int)t;
+                    int e = kind == 3 ? (int)lo : (int)(top >> (8 * i) & 255), c = (int)(acc >> (8 * i) & 255),
+                        dv = (c - e) * (int)t;
                     dv = dv >= 0 ? dv / 255 : -(-dv / 255);
                     v[i] = (unsigned)(e + dv);
                 }
@@ -716,13 +731,50 @@ static void tint_image(void *bitmap, unsigned acc) {
     bitmap_unlock_buffer(bitmap);
 }
 
+/* Greyscale's cover (tools/palette.py grey_pixel): every pixel its Rec. 601 luma, alpha kept. Luma is linear, so a premultiplied pixel greys as stored (its grey stays within its alpha). */
+static void grey_image(void *bitmap) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned format, stride, y, x, w4, h4, l;
+    unsigned char *px, *p;
+    const unsigned char *o;
+    format = *(unsigned short *)((char *)bitmap + BITMAP_FORMAT) - 1u;
+    w4 = *(unsigned *)bitmap, h4 = *(unsigned *)((char *)bitmap + 4);
+    if (format >= 4 || !w4 || !h4 || w4 > 4096 || h4 > 4096) return;
+    stride = bitmap_get_line_length(bitmap);
+    if (stride < w4 * 4) return;
+    px = bitmap_lock_buffer_for_write(bitmap);
+    if (!px) return;
+    o = at[format];
+    for (y = 0; y < h4; ++y)
+        for (p = px + y * stride, x = 0; x < w4; ++x, p += 4) {
+            l = luma(p[o[0]], p[o[1]], p[o[2]]);
+            p[o[0]] = p[o[1]] = p[o[2]] = (unsigned char)l;
+        }
+    bitmap_unlock_buffer(bitmap);
+}
+
+/* Greyscale's image rule: a cover (a '/' or ':' name) greys, except a lock screen wallpaper (/mnt/mmc/lockscreenimage/...: a picture, not a cover). Out of line, off
+ * the Classic path. */
+static __attribute__((noinline)) void grey_rule(const char *name, void *bitmap) {
+    static const char dir[] = "lockscreenimage/";
+    const char *s, *a, *b;
+    int cover = 0;
+    for (s = name; *s; ++s) {
+        cover |= *s == '/' ||
+                 *s == ':'; /* (has_slash_colon's test: a third caller would take it out of line on the Classic path) */
+        for (a = s, b = dir; *b && *a == *b; ++a, ++b) {
+        }
+        if (!*b) return;
+    }
+    if (cover) grey_image(bitmap);
+}
+
 /* The palette's image rule: the accent's tint of the images it owns (tinted instead of flipped, whatever the background; a riso scheme's row glyphs take its glyph colour), else the
- * background's (Light or a riso scheme: light_image). Greyscale leaves the theme's images as they are; a cover (a '/' or ':' name) is where it would grey. */
+ * background's (Light or a riso scheme: light_image). Greyscale leaves the theme's images as they are and greys a cover (a '/' or ':' name; not a lock screen wallpaper). */
 static void pal_image(const char *name, void *bitmap) {
     int kind = -1;
     unsigned acc;
     if (!name || !*name || !bitmap) return;
-    if (PK_SCH == SCHEME_GREY) return;
     acc = pal.accw;
     if (PK_ACC) {
         if (in_names(name, fill_names))
@@ -739,6 +791,12 @@ static void pal_image(const char *name, void *bitmap) {
             kind = 6;
         else if ((has_prefix(name, glyph_names) && !in_names(name, glyph_not)) || in_names(name, glyph_stock))
             kind = 4;
+    } else if (
+        pal.key ==
+        SCHEME_GREY
+            << 8) { /* Greyscale (no accent, no remap, no tint): only its covers; behind the accent's test, so an accent's path is as before */
+        grey_rule(name, bitmap);
+        return;
     }
     if (kind >= 0)
         accent_image(kind, bitmap,

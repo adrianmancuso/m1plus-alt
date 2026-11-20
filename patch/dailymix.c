@@ -988,7 +988,10 @@ static int dm_ph_album(job_t *j) {
         if (!j->alb[i]) return 1;
         if (m1_tone_get(j->alb[i], &tone))
             j->tone[j->ntone++] = tone & 0xffffff;
-        else if (dm.win && (file = cc_url(url, j->alb[i])) != (const char *)0 &&
+        else if (dm.win &&
+                 pal_scheme_on() !=
+                     SCHEME_GREY && /* (Greyscale: a cover decodes grey; the mix file keeps its tones all day) */
+                 (file = cc_url(url, j->alb[i])) != (const char *)0 &&
                  cc_decode(dm.win, file, 1, 1, 1, &px)) {
             tone = m1_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
             m1_tone_put(j->alb[i], tone);

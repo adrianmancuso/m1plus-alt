@@ -45,6 +45,8 @@ unsigned pal_fill(void);
 int pal_scheme(void);
 int pal_scheme_on(void);
 int pal_scheme_set(int s);
+/* 1 when the last change of the effective state (pal_apply) turned Greyscale on or off: the relight functions then look at their covers and tones again. */
+int pal_regrey(void);
 
 /* A colour (color_t: bytes r, g, b, a) as the payload draws it: flipped in Light Mode when neutral, else as it is. A clear colour (alpha 0) stays clear. */
 unsigned ui_ink(unsigned c);
@@ -58,7 +60,8 @@ int pal_bg_set(int mode);
 /* The flip of one neutral channel / colour and the tint a cover-tinted page shows (pure; test/pod/palette.py runs them against tools/palette.py). */
 unsigned light_flip(unsigned c);
 int light_is_neutral(unsigned c);
-/* The colour a cover-tinted page puts under its text: the tone itself (never a role colour: pal_not_role), or in Light Mode the page's neutral colour (the chromatic dark tone cannot flip, and the page's text does). */
+/* The colour a cover-tinted page puts under its text: the tone itself (never a role colour: pal_not_role), or in Light Mode the page's neutral colour (the chromatic dark tone cannot flip, and the page's text does);
+ * under Greyscale the tone's Rec. 601 luma grey. */
 unsigned pal_tone(unsigned tone);
 /* A colour derived from a cover (a tone, a shade of it, the status bar's colour) that is a role colour (a pressed row, the progress fill) moved one LSB off it; any other as it is. */
 unsigned pal_not_role(unsigned c);

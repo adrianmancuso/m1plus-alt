@@ -43,7 +43,7 @@ Red `#FF453A`, Orange `#FF9F0A`, Green `#30D158`, Teal `#40C8E0`, Purple `#BF5AF
 | pressed row / card | soft tint `mix(surface, accent, 22 %)`; the text stays white |
 | row glyphs (M1+ Music, Folders, Settings cards, the track sheet) | the accent at rest |
 | switch on | track is the accent, knob white |
-| Podcasts Library tiles | glyph is the accent; the `#1C1C1E` square stays |
+| Podcasts Library tiles | glyph is the accent; the `#1C1C1E` square stays (a riso scheme: remapped) |
 | pull-down ON tiles | disc is the accent, glyph stays `#141414` (white on Orange or Teal would be about 2:1) |
 | pressed Play / Shuffle | see below |
 | slider fill, progress fills, picker check, playing wave marker | the accent |
@@ -108,7 +108,7 @@ change. `tools/palette_audit.py WORKDIR` lists the tinted names.
 | PRESS | `pod_cd_*_down` (pressed settings card) | `mix(#1C1C1E, accent, 22 %)` |
 | DISC | the pull-down's ON tiles | `#141414` stays, white becomes the accent, by lightness; off (`#2C2C2E`) and disabled (`#1E1E1E`) tiles are untouched |
 | GLYPH | row glyphs (below) | every colour becomes the accent, alpha kept |
-| TILE | the four Podcasts Library tiles | the disc rule with `#1C1C1E` as the fixed end: white becomes the accent, the square stays exactly |
+| TILE | the four Podcasts Library tiles | the disc rule with `#1C1C1E` as the fixed end: white becomes the accent, the square stays exactly (a riso scheme: the remapped square) |
 | SHUFDOWN | the Shuffle disc's pressed image | the disc becomes `mix(rest, accent, 22 %)`, the glyph stays |
 
 Premultiplied pixels are handled. Images are global, so cover-tinted pages get the tinted images
@@ -186,6 +186,25 @@ lyrics, the Wi-Fi bars and spinner, the stock pages' 40 px icons, the EQ cards' 
   a grey would leave that grey untinted on other pages.
 - Limits: the global `nb_fade` is a tinted black over the cover tone on a cover page; slider and
   progress tracks (`#333`) stay neutral.
+
+## Greyscale covers
+
+The Greyscale scheme (`appearance-scheme` 8) is Black + Neutral with only the image hook on: a cover
+(a decoded name with `/` or `:`) comes back with every pixel its Rec. 601 luma, alpha kept
+(`grey_rule`, model `grey_pixel`). Premultiplied pixels grey as stored, since luma is linear. Theme
+images, the style hook and lock screen wallpapers (`/mnt/mmc/lockscreenimage/`) stay as they are.
+
+- `pal_tone` gives a tone's grey, so Now Playing, album page and Show page tints follow the cover.
+- The tone cache stores nothing under Greyscale, and the Daily Mix decodes no cover for its tones
+  (cache hits, else its fixed palette), so no grey tone outlives the scheme.
+- When Greyscale turns on or off, `pal_regrey` makes `np_relight` look again at Now Playing's tone and
+  a server track's cover.
+- Stays in colour: the Daily Mix art and card, painted from tones the payload chose, not decoded.
+- Kept as decoded until rebuilt (the page reopens, the next track or a scroll), in both directions:
+  Cover Flow textures, the grid tiles (Albums, the menu's Recently Played shelf, the album page
+  header), the minibar and Now Playing info art, Big Cover, the Home cover, and an album page or
+  Show page tone worked out from a grey cover. These are RAM copies made by `cc_decode`, which no
+  relight function owns.
 
 ## Light background (hidden)
 

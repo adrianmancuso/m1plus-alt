@@ -1465,4 +1465,53 @@ def scheme_light_tests(ctx):
         expect(not bad, f'{name} {"day" if day else "night"}: the other images follow Light\'s rule between the scheme\'s ends ({bad[:4]})')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests]
+def grey_tests(ctx):
+    """Greyscale: a cover (a path or URL) comes back grey, every pixel its Rec. 601 luma, alpha kept, in every format and premultiplied; theme images, wallpapers and the style hook stay;
+    pal_tone answers the tone's grey; Classic leaves covers alone; the tone cache keeps no grey tone. Under a riso scheme the Library tiles' square is remapped, under Classic it stays."""
+    expect = ctx.expect
+    from PIL import Image
+    px = [(r, g, b, a) for r in (0, 0x30, 0xc0, 255) for g in (0, 0x60, 255) for b in (0, 0x30, 255) for a in (255, 0x80)]
+    px = (px * 2)[:64]
+    grey = [L.grey_pixel(p) for p in px]
+    for nm in ('/mnt/mmc/a/cover.jpg', 'http://x/a.jpg', 'file:///mnt/mmc/.m1plus/covers/a.jpg'):
+        for fmt in (1, 2, 3, 4):
+            expect(sch_lm(b'8\n').image(nm, 8, 8, px, fmt=fmt) == grey, f'Greyscale: {nm} format {fmt} comes back grey, each pixel (y, y, y, a)')
+        got = sch_lm(b'8\n', False).image(nm, 8, 8, px)
+        expect(got == grey and got == list(L.render_image(nm, Image.frombytes('RGBA', (8, 8), bytes(c for p in px for c in p)), scheme='greyscale').getdata()), f'{nm} by night the same, and the model agrees')
+    st = [(v * a // 255, w * a // 255, u * a // 255, a) for v, w, u, a in px]
+    got = sch_lm(b'8\n').image('/mnt/mmc/a/cover.jpg', 8, 8, st, premul=True)
+    expect(got == [L.grey_pixel(p) for p in st] and all(max(p[:3]) <= p[3] for p in got), 'a premultiplied cover greys as stored (luma is linear) and stays within its alpha')
+    expect(L.grey_pixel((0xc0, 0x60, 0x30, 0x80)) == ((0xc0 * 299 + 0x60 * 587 + 0x30 * 114) // 1000,) * 3 + (0x80,), 'the model: y = (r*299 + g*587 + b*114) / 1000')
+    m = sch_lm(b'8\n')
+    for nm in ('pod_ic_x', 'np_play', '/mnt/mmc/lockscreenimage/a.jpg'):
+        expect(m.image(nm, 8, 8, px) == px, f'Greyscale: {nm} stays as it is (a theme image, or a lock screen wallpaper)')
+    expect(m.color(m.style(color=0xff3060c0)) == 0xff3060c0 and m.color(m.style(color=WHITE)) == WHITE, 'Greyscale: the style hook passes colours through')
+    t = 0xff3060c0
+    y = (0xc0 * 299 + 0x60 * 587 + 0x30 * 114) // 1000
+    got = m.call(PSYMS['pal_tone'], a0=t, count=20000)
+    expect(got == 0xff000000 | y * 0x010101 and got == word(L.tone((0xc0, 0x60, 0x30, 255), 'greyscale')), f'pal_tone(0x{t:08x}) under Greyscale is its grey 0x{got:08x}')
+    expect(sch_lm(b'8\n', False).call(PSYMS['pal_tone'], a0=t, count=20000) == got, 'by night as well')
+    for s in (b'0\n', None):
+        n = sch_lm(s)
+        expect(n.image('/mnt/mmc/a/cover.jpg', 8, 8, px) == px and n.image('http://x/a.jpg', 8, 8, px) == px, f'Classic ({s}): covers untouched')
+    out = m.alloc(4)
+    m.call(PSYMS['m1_tone_put'], a0=7, a1=0xff3060c0, count=100000)
+    expect(m.call(PSYMS['m1_tone_get'], a0=7, a1=out, count=100000) == 0, 'Greyscale: the tone cache stores nothing (no grey tone outlives the scheme)')
+    c = sch_lm(b'0\n')
+    c.call(PSYMS['m1_tone_put'], a0=7, a1=0xff3060c0, count=100000)
+    expect(c.call(PSYMS['m1_tone_get'], a0=7, a1=out, count=100000) and c.word(out) == 0xff3060c0, 'Classic: the tone cache stores as before')
+    # cost of greying a cover
+    g = sch_lm(b'8\n').count(); n0 = g.icount; g.image('/mnt/mmc/a/cover.jpg', 8, 8, px); cg = g.icount - n0
+    print(f'  Greyscale on an 8 x 8 cover: {cg} instructions ({cg / 64:.1f} a pixel)')
+    # the Library tiles' square: remapped under a riso scheme, as it is under Classic
+    sq = [(0x1c, 0x1c, 0x1e, 255)] * 16
+    for s, name in ((1, 'navy-coral'), (5, 'purple-yellow')):
+        for day in (True, False):
+            want = L.remap(L.TILE, name, day)
+            expect({p[:3] for p in sch_lm(b'%d\n' % s, day).image('pod_ic_dltile', 4, 4, sq)} == {want} and want != L.TILE, f'{name} {"day" if day else "night"}: a Library tile\'s square is the remapped {want}')
+    for acc in (b'1\n', b'4\n'):
+        for mode in (b'0\n', b'1\n', b'2\n'):
+            expect({p[:3] for p in LM(mode, acc=acc).image('pod_ic_dltile', 4, 4, sq)} == {L.TILE}, f'Classic (background {mode}, accent {acc}): the tile square stays #1C1C1E')
+
+
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests, grey_tests]

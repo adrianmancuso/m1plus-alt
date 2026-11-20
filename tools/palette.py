@@ -13,7 +13,7 @@ patch/offsets.inc (LIGHT_*), the name lists are below and pod.py writes them int
   remap(c, scheme, day) a riso scheme's mapping of a neutral colour (SCHEMES; cream paper by day, the scheme's dark paper by night), the others as they are
 
 The scheme (SCHEMES, the saved digit is the position) overrides the background and the accent: 'classic' leaves them as they are, a riso scheme maps every neutral colour between its
-paper and its ink (scheme_ends) and takes its own accent and glyph colour, 'greyscale' leaves the theme's colours and images as Black + Neutral does (its covers are a later step).
+paper and its ink (scheme_ends) and takes its own accent and glyph colour, 'greyscale' leaves the theme's colours and images as Black + Neutral does and greys the covers (grey_pixel; not a lock screen wallpaper).
 
 An image is the theme's only when its name is a plain asset name (no '/' and no ':'): covers by path or URL never are. Album art, covers, wallpapers, photos and videos are never changed.
 """
@@ -294,9 +294,10 @@ def accent_pixel(kind, p, ac, bg='black', scheme='classic', day=True):
         top = remap((255, 255, 255), scheme, day) if sch else (255,) * 3
         u = _clamp255((p[0] - SHUF_DOWN_R) * 255 // (255 - SHUF_DOWN_R))
         return tuple(b + _trunc((e - b) * u, 255) for b, e in zip(base, top)) + (p[3],)
-    if kind == 'tile':   # the square (#1C1C1E) stays, white goes to the accent, the glyph's antialiased edge blends by lightness (of the red channel)
+    if kind == 'tile':   # the square (#1C1C1E; a riso scheme: remapped) stays, white goes to the accent, the glyph's antialiased edge blends by lightness (of the red channel)
         u = _clamp255((p[0] - TILE_R) * 255 // (255 - TILE_R))
-        return tuple(t + _trunc((a - t) * u, 255) for t, a in zip(TILE, acc)) + (p[3],)
+        sq = remap(TILE, scheme, day) if sch else TILE
+        return tuple(t + _trunc((a - t) * u, 255) for t, a in zip(sq, acc)) + (p[3],)
     if kind == 'fill':   # the fill (or lighter: white) becomes the accent, the track (or darker) stays, a pixel between them (an antialiased edge over a track) moves by its share t of the way fill -> accent
         if p[0] >= FILL_R: return acc + (p[3],)
         if p[0] <= TRACK_R: return p
@@ -340,11 +341,41 @@ def dl_ring_pixel(p, ac):
     return tuple((DL_TRACK_R * (255 - f) + c * f + 127) // 255 for c in ACCENT_RGB[ac]) + (p[3],)
 
 
+def luma(r, g, b):
+    """Rec. 601 luma, C's truncation (patch/palette.c luma)."""
+    return (r * 299 + g * 587 + b * 114) // 1000
+
+
+def grey_pixel(p):
+    """One pixel (r, g, b, a) of a cover under Greyscale, as stored (patch/palette.c grey_image): every channel the luma, alpha kept. Luma is linear, so a premultiplied pixel greys as
+    stored and stays within its alpha."""
+    y = luma(*p[:3])
+    return (y, y, y, p[3])
+
+
+def grey_cover(name):
+    """Greyscale greys this decoded image: a cover by path or URL ('/' or ':'), not a lock screen wallpaper (/mnt/mmc/lockscreenimage/...)."""
+    return bool(name) and not plain(name) and 'lockscreenimage/' not in name
+
+
+def tone(t, scheme='classic'):
+    """patch/palette.c pal_tone of a cover tone (3 or 4 channels) while the remap does not invert (Light and a riso scheme by day give NP_NEUTRAL instead): the tone's grey under
+    Greyscale (alpha kept), else the tone; either moved off a role colour."""
+    if scheme == 'greyscale': t = (luma(*t[:3]),) * 3 + tuple(t[3:])
+    return not_role(t)
+
+
 def render_image(name, im, bg='black', ac='neutral', scheme='classic', day=True):
     """The image the device shows (RGBA, straight alpha) for a background and an accent: an accent-tinted image is tinted instead of flipped (the accent wins over Light; its press piece follows the Tinted
     background), else Light's rule, else on Tinted a surface's dark neutral pixels take WASH % of the accent. A riso scheme: its accent's tint, else Light's rule between its ends;
-    Greyscale: the theme's images as they are."""
-    if scheme == 'greyscale': return im.convert('RGBA')
+    Greyscale: the theme's images as they are, a cover grey (grey_cover, grey_pixel; straight alpha here)."""
+    if scheme == 'greyscale':
+        im = im.convert('RGBA')
+        if not grey_cover(name): return im
+        from PIL import Image
+        out = Image.new('RGBA', im.size)
+        out.putdata([grey_pixel(p) for p in im.getdata()])
+        return out
     sch = riso(scheme)
     kind = accent_kind(name) if ac != 'neutral' or sch else None
     if kind is None:
