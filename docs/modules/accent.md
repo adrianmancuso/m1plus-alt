@@ -3,8 +3,9 @@
 **Sources:** `patch/palette.c`, `patch/palette.h`, `tools/palette.py` (the model),
 `tools/palette_audit.py`, `tools/pod.py` (`STYLE_COLOR`, `IMAGE_ADD`, `STYLE_GRADIENT`,
 `LIGHT_PINS`), `patch/offsets.inc` (`ROLE_*`, `ACC_*`, `LIGHT_*`). **Tests:** `test/pod/palette.py`.
-**Preview:** `tools/preview/preview_accent.py WORKDIR` (`out/preview/accent-*.png`; `make preview`
-runs it), `tools/preview/preview_settings.py`.
+**Preview:** `tools/preview/preview_accent.py WORKDIR` (`out/preview/accent-*.png`),
+`tools/preview/preview_schemes.py WORKDIR` (`out/preview/schemes/`); `make preview` runs both.
+`tools/preview/preview_settings.py`.
 
 The user picks a system accent colour and a page background (Black or Tinted). Both go through **one
 palette layer**: every colour the painter gets passes `pal_map(colour)`, which knows the
@@ -192,6 +193,37 @@ lyrics, the Wi-Fi bars and spinner, the stock pages' 40 px icons, the EQ cards' 
   a grey would leave that grey untinted on other pages.
 - Limits: the global `nb_fade` is a tinted black over the cover tone on a cover page; slider and
   progress tracks (`#333`) stay neutral.
+
+## Schemes
+
+A scheme (Settings > Appearance > Scheme) replaces Background and Accent with one choice: Classic
+(the Background and Accent above), seven riso schemes (paper, ink and one accent each) or
+Greyscale. It is saved in `appearance-scheme` (`SCHEME_FILE`, one digit, 0 Classic, 1..7 the riso
+schemes, 8 Greyscale; anything else or missing is Classic), written atomically by `pal_scheme_set`.
+While a scheme other than Classic is saved, Background and Accent are hidden and ignored: the scheme
+decides both, whatever their files hold. Classic goes through the paths above, bit-identical.
+
+- **Riso schemes:** the remap does not invert. A neutral colour maps per channel between two ends:
+  black to the paper, white to the ink, linearly between (C truncation, `pal_remap`; model
+  `remap`, `scheme_ends`). The accent comes from the scheme (`SCHn_ACC`) and takes the Accent
+  roles: pressed tint, progress and slider fill, switch track, row glyph, pull-down tile. Row glyphs
+  use the scheme's own glyph colour (`SCHn_GDAY`, `SCHn_GNIGHT`).
+- **Day and night:** the clock rule of Light Auto (07:00 to 18:59). By day the paper is cream
+  `SCHEME_PAPER` `#F4F1EA` and white maps to the scheme's ink (`SCHn_INK`). By night the paper is the
+  scheme's dark (`SCHn_NIGHT`) and white maps to the cream. The secondary grey `#AAAAAA` maps as
+  `#D4D4D4` by day (colours only, not images) so it keeps 4.5:1 on cream. The timer re-evaluates
+  the clock while a scheme is on.
+- **Cover pages** keep the cover's own colours; their tone goes through `pal_tone`, which by day
+  under a riso scheme returns the neutral tone. The Cover Flow shelf frame is the scheme's paper
+  (`pal_map(black)`).
+- **Greyscale** is Black + Neutral with the style hook as a pass-through and only the image hook on:
+  covers turn grey (below). Theme images, every style colour and lock screen wallpapers stay in
+  colour or as they are.
+
+**Sources:** `patch/palette.c` (`pal_scheme`, `pal_scheme_set`, `pal_refresh`, `pal_remap`),
+`patch/offsets.inc` (`SCHEME_*`, `SCHn_*`), `tools/palette.py` (`SCHEMES`, `map_colour`,
+`render_image`, `scheme_ends`), `tools/pod_pages.py` (`m1plus_scheme`). **Tests:**
+`test/pod/palette.py` (`scheme_*_tests`, `grey_tests`).
 
 ## Greyscale covers
 

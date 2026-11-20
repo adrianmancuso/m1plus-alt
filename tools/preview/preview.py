@@ -287,6 +287,7 @@ def main():
     run('preview_batthist.py', work, os.path.join(os.path.dirname(os.path.abspath(out)), 'batthist.png'))   # batthist.png: Settings > Battery with Battery History off, empty and with a day of data (docs/modules/batthist.md)
     run('preview_split.py', work, os.path.dirname(os.path.abspath(out)))   # split-*.png: Settings > Library > Split Artists (the row, the page off and on; docs/modules/settings.md)
     run('preview_accent.py', work, os.path.dirname(os.path.abspath(out)))   # accent-black.png, accent-graphite.png: the planned Accent + Background picker (a mock-up, not in the firmware)
+    run('preview_schemes.py', work, os.path.join(os.path.dirname(os.path.abspath(out)), 'schemes'))   # schemes/schemes.png, schemes/scheme-*.png: the M1+ Music menu and Now Playing per colour scheme, day and night (docs/modules/accent.md)
     with tempfile.TemporaryDirectory() as t:
         p = lambda n: os.path.join(t, n)
         run('preview_lockscreen.py', raw, p('lock.png'), f'release={raw}/ui/screensaver_page.bin',
