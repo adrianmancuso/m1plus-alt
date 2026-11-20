@@ -274,6 +274,10 @@ def run(ctx):
     # the accepted overflows (the user's choice): the Control Center page's Playback row in Russian (Воспроизведение, the Settings header's word), and its Sleep Timer row (the stock text) in the languages where it is too long (the user's choice, 2026-11-13): each ends in an ellipsis and scrolls when focused
     cut = [o for o in over if o[:3] == (pod_pages.PULLDOWN_PAGE.key, 'Playback', 'ru_RU') or o[:2] == (pod_pages.PULLDOWN_PAGE.key, 'Sleep Timer')]
     over = [o for o in over if o not in cut]
+    # and the Scheme picker's longest names (Federal Blue & Fluoro Orange, Green & Bright Red in Japanese): a two-colour name is longer than any other row, so it ends in an ellipsis and scrolls when focused
+    schemes = [o for o in over if o[0] == pod_pages.SCHEME_PAGE.key and o[1] in pod_pages.SCHEME_VALUES]
+    over = [o for o in over if o not in schemes]
+    expect(schemes and {o[1] for o in schemes} <= {'Federal Blue & Fluoro Orange', 'Green & Bright Red', 'Teal & Sunflower', 'Black & Fluoro Pink'}, f'only the Scheme picker\'s long names are cut with an ellipsis ({sorted({o[1] for o in schemes})})')
     expect(sorted(o[1:3] for o in cut) == sorted([('Playback', 'ru_RU'), ('Sleep Timer', 'ja_JP'), ('Sleep Timer', 'fr_FR'), ('Sleep Timer', 'po_PL'), ('Sleep Timer', 'ru_RU')]), f'the Russian Playback row and the Sleep Timer row in ja, fr, pl and ru of Control Center are the labels cut with an ellipsis (Spanish fits since STOCK_FIX shortened powerm_sleep for the Sleep Timer page title) ({cut})')
     expect(not over, f'every menu, Extras, Shuffle, Settings and Main Menu row and every page title fits its label in all 13 languages ({over[:40]})')
     hdr_over = []   # the section headers of the Extras and Settings > Extras pages: 16 px grey captions in labels of 274 px

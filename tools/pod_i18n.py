@@ -1513,6 +1513,28 @@ TEXT = dict([
        'Morado', 'Viola', 'ม่วง', 'Fioletowy', 'Фиолетовый', 'Фіолетовий'),
     _t('Champagne', '香槟色', '香檳色', 'シャンパン', '샴페인', 'Champagne', 'Champagner',
        'Champán', 'Champagne', 'แชมเปญ', 'Szampański', 'Шампань', 'Шампань'),
+    # Settings > Appearance > Scheme (patch/palette.c, docs/modules/accent.md): the row and its picker's title, then the nine schemes (the picker's rows and the row's value). The colour words are translated, "&" stays;
+    # the names of the Pantone-style inks ("Fluoro", "Federal Blue") follow the printers' usage where a language has one.
+    _t('Scheme', '配色', '配色', 'スキーム', '색상 구성', 'Palette', 'Schema',
+       'Esquema', 'Schema', 'ชุดสี', 'Schemat', 'Схема', 'Схема'),
+    _t('Classic', '经典', '經典', 'クラシック', '클래식', 'Classique', 'Klassisch',
+       'Clásico', 'Classico', 'คลาสสิก', 'Klasyczny', 'Классика', 'Класика'),
+    _t('Navy & Coral', '藏青 & 珊瑚', '藏青 & 珊瑚', 'ネイビー & コーラル', '네이비 & 코랄', 'Marine & Corail', 'Marine & Koralle',
+       'Marino & Coral', 'Blu navy & Corallo', 'กรมท่า & คอรัล', 'Granat & Koral', 'Тёмно-синий & Коралл', 'Темно-синій & Корал'),
+    _t('Teal & Sunflower', '青绿 & 向日葵', '青綠 & 向日葵', 'ティール & ひまわり', '틸 & 해바라기', 'Sarcelle & Tournesol', 'Türkis & Sonnenblume',
+       'Turquesa & Girasol', 'Turchese & Girasole', 'เขียวอมฟ้า & ทานตะวัน', 'Morski & Słonecznik', 'Бирюзовый & Подсолнух', 'Бірюзовий & Соняшник'),
+    _t('Federal Blue & Fluoro Orange', '联邦蓝 & 荧光橙', '聯邦藍 & 螢光橙', 'フェデラルブルー & 蛍光オレンジ', '페더럴 블루 & 형광 오렌지', 'Bleu fédéral & Orange fluo', 'Bundesblau & Neonorange',
+       'Azul federal & Naranja flúor', 'Blu federale & Arancio fluo', 'น้ำเงินเฟเดอรัล & ส้มสะท้อนแสง', 'Błękit federalny & Neonowy pomarańcz', 'Федеральный синий & Флуор. оранжевый', 'Федеральний синій & Флуор. помаранчевий'),
+    _t('Green & Bright Red', '绿色 & 亮红', '綠色 & 亮紅', 'グリーン & ブライトレッド', '그린 & 밝은 레드', 'Vert & Rouge vif', 'Grün & Leuchtrot',
+       'Verde & Rojo vivo', 'Verde & Rosso vivo', 'เขียว & แดงสด', 'Zielony & Jaskrawa czerwień', 'Зелёный & Ярко-красный', 'Зелений & Яскраво-червоний'),
+    _t('Purple & Yellow', '紫色 & 黄色', '紫色 & 黃色', 'パープル & イエロー', '퍼플 & 옐로', 'Violet & Jaune', 'Violett & Gelb',
+       'Morado & Amarillo', 'Viola & Giallo', 'ม่วง & เหลือง', 'Fiolet & Żółty', 'Фиолетовый & Жёлтый', 'Фіолетовий & Жовтий'),
+    _t('Burgundy & Mint', '酒红 & 薄荷', '酒紅 & 薄荷', 'バーガンディ & ミント', '버건디 & 민트', 'Bordeaux & Menthe', 'Burgunder & Mint',
+       'Burdeos & Menta', 'Bordeaux & Menta', 'เบอร์กันดี & มินต์', 'Burgund & Mięta', 'Бордовый & Мята', 'Бордовий & М\'ята'),
+    _t('Black & Fluoro Pink', '黑色 & 荧光粉', '黑色 & 螢光粉', 'ブラック & 蛍光ピンク', '블랙 & 형광 핑크', 'Noir & Rose fluo', 'Schwarz & Neonpink',
+       'Negro & Rosa flúor', 'Nero & Rosa fluo', 'ดำ & ชมพูสะท้อนแสง', 'Czarny & Neonowy róż', 'Чёрный & Флуор. розовый', 'Чорний & Флуор. рожевий'),
+    _t('Greyscale', '灰度', '灰階', 'グレースケール', '그레이스케일', 'Niveaux de gris', 'Graustufen',
+       'Escala de grises', 'Scala di grigi', 'โทนสีเทา', 'Skala szarości', 'Оттенки серого', 'Відтінки сірого'),
     # The Songs page (patch/songs.c): the select mode's navbar ("N Selected", the Select All text button) and its
     # Delete pill. The count goes where %d is (the payload puts the number there). Add to playlist is the stock key (STOCK). The Play pill's text, "Play", is below (the album, playlist and Daily Mix pages, and the Songs, Folders and artist pages' flat pills).
     _t('Select All', '全选', '全選', 'すべて選択', '모두 선택', 'Tout choisir', 'Alle wählen',

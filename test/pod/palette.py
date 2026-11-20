@@ -523,8 +523,8 @@ def settings_tests(ctx):
     expect([(r.label, r.action, r.arg) for r in B.rows] == [('Black', P.ACT_BGSET, 0), ('Tinted', P.ACT_BGSET, 1)] and B.title == 'Background' and B.key == 'm1plus_background'
            and P.BG_VALUES == ('Black', 'Tinted') and all(P.row_kind(r) == 'check' for r in B.rows) and not [x for x in B.layout if isinstance(x, P.Note)],
            'the picker: Black and Tinted in the saved order, titled Background, a check each, no Light')
-    expect([(r.label, r.action, r.arg) for r in W.rows][:2] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value',
-           'the Appearance page: the Background value row above the Accent one (the Control Center link follows in its own card, test/pod/pdtiles.py)')
+    expect([(r.label, r.action, r.arg) for r in W.rows][1:3] == [('Background', P.ACT_BG, P.BG_PAGE_INDEX), ('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value',
+           'the Appearance page: the Background value row above the Accent one (Scheme above them, the Control Center link below in its own card, test/pod/pdtiles.py)')
 
     def open_pick(data=None, acc=None):
         m = LM(acc=acc)
@@ -553,12 +553,12 @@ def settings_tests(ctx):
     # the Appearance page shows the saved background and accent
     def values(data, acc):
         m = LM(acc=acc)
-        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(2)] + [f'pod_value{i}' for i in range(2)] + [f'pod_label{i}' for i in range(2)])}
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(3)] + [f'pod_value{i}' for i in range(3)] + [f'pod_label{i}' for i in range(3)])}
         if data is not None: m.fs[BG_FILE] = data
         row = m.alloc(12)
         m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
         m.call(PSYMS['on_row'], a0=row, count=6000000)
-        return [[c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{i}']] for i in range(2)]
+        return [[c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets[f'pod_value{i}']] for i in (1, 2)]
     expect([values(d, a) for d, a in ((None, None), (b'1\n', b'1\n'), (b'2\n', b'6\n'), (b'7', None))] == [[['Black'], ['Neutral']], [['Tinted'], ['Red']], [['Black'], ['Champagne']], [['Black'], ['Neutral']]],
            'the Appearance rows show the saved background and accent (Black for no, invalid or Light)')
     # the assets
@@ -567,8 +567,8 @@ def settings_tests(ctx):
     expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(2))
            and tree.find('label_title').get('tr_text') == 'Background', 'the picker asset: two rows without a glyph, a hidden insensitive check each')
     st = awtk_ui.parse(open(os.path.join(raw, 'm1plus_appearance.bin'), 'rb').read())
-    expect(st.find('pod_row0').find('pod_icon').get('image') == 'pod_ci_contrast' and st.find('pod_value0').get('tr_text') == 'Black' and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_palette'
-           and st.find('pod_value1').get('tr_text') == 'Neutral', 'the Appearance page asset: Background (contrast glyph, "Black") above Accent (palette glyph, "Neutral")')
+    expect(st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_contrast' and st.find('pod_value1').get('tr_text') == 'Black' and st.find('pod_row2').find('pod_icon').get('image') == 'pod_ci_palette'
+           and st.find('pod_value2').get('tr_text') == 'Neutral', 'the Appearance page asset: Background (contrast glyph, "Black") above Accent (palette glyph, "Neutral")')
 
 
 def rgba(rgb, a=255):
@@ -806,6 +806,83 @@ def accent_setting_tests(ctx):
     expect(('timer_remove', 0x777) in m.calls, 'and the accent Neutral then ends it')
 
 
+def scheme_picker_tests(ctx):
+    """The Scheme picker (Settings > Appearance > Scheme, m1plus_scheme): the row and its value, the page, a swatch per row, the check, a tap saves and applies at once, Background and Accent hide under a scheme."""
+    expect, P = ctx.expect, pod_pages
+    S, W = P.SCHEME_PAGE, P.APPEARANCE_PAGE
+    names = ['Classic', 'Navy & Coral', 'Teal & Sunflower', 'Federal Blue & Fluoro Orange', 'Green & Bright Red', 'Purple & Yellow', 'Burgundy & Mint', 'Black & Fluoro Pink', 'Greyscale']
+    expect([(r.label, r.action, r.arg) for r in S.rows] == [(n, P.ACT_SCHEMESET, i) for i, n in enumerate(names)] and S.title == 'Scheme' and S.key == 'm1plus_scheme' and P.SCHEME_VALUES == tuple(names)
+           and P.PAGES[P.SCHEME_PAGE_INDEX] is S and P.SCHEME_PAGE_INDEX == P.ACCENT_PAGE_INDEX + 1 and all(P.row_kind(r) == 'check' for r in S.rows) and (P.ACT_SCHEME, P.ACT_SCHEMESET) == (191, 192),
+           'the picker: Classic, the seven riso schemes and Greyscale in the saved order, titled Scheme, a check each, right after the Accent picker')
+    expect([(r.label, r.action, r.arg) for r in W.rows][:1] == [('Scheme', P.ACT_SCHEME, P.SCHEME_PAGE_INDEX)] and P.row_kind(W.rows[0]) == 'value' and [r.label for r in W.rows] == ['Scheme', 'Background', 'Accent', 'Control Center']
+           and W.layout[1] is P.GAP and W.layout[4] is P.GAP, 'the Appearance page: Scheme in a card of its own above Background and Accent, then Control Center')
+    n_rows = len(W.rows)
+
+    def appearance(scheme):
+        m = LM(scheme=scheme)
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(n_rows)] + [f'pod_value{i}' for i in range(n_rows)] + [f'pod_label{i}' for i in range(n_rows)])}
+        row = m.alloc(12)
+        m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
+        m.call(PSYMS['on_row'], a0=row, count=6000000)
+        return m
+
+    def vis(m, i):
+        v = [c for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_row{i}']]
+        s = [c[2] for c in m.calls if c[0] == 'widget_set_sensitive' and c[1] == m.widgets[f'pod_row{i}']]
+        return (v[-1][2] if v else None, s[-1] if s else None)
+    got = []
+    for data in (None, b'0\n', b'1\n', b'4\n', b'8\n', b'9\n'):
+        m = appearance(data)
+        val = [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value0']]
+        got.append((val, vis(m, 1), vis(m, 2), vis(m, 0)[1], vis(m, 3)[1]))
+    want = lambda name, on: ([name], (on, on), (on, on), None, None)
+    expect(got == [want('Classic', 1), want('Classic', 1), want('Navy & Coral', 0), want('Green & Bright Red', 0), want('Greyscale', 0), want('Classic', 1)],
+           'the Scheme row shows the saved name (Classic for no or an invalid file); Background and Accent are invisible and insensitive under any other scheme, there under Classic; Scheme and Control Center untouched')
+
+    def open_pick(data=None):
+        m = LM(scheme=data)
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(9)] + [f'pod_check{i}' for i in range(9)])}
+        row = m.alloc(12)
+        m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_SCHEME); m.setword(row + 8, P.SCHEME_PAGE_INDEX)
+        m.call(PSYMS['on_row'], a0=row, count=3000000)
+        return m
+
+    def shown(m, i):
+        v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[f'pod_check{i}']]
+        return v[-1] if v else None
+    m = open_pick()
+    expect(('window_open', S.key) in m.calls and SCHEME_FILE not in m.fs and [shown(m, i) for i in range(9)] == [1] + [0] * 8, 'the picker opens with the check on Classic, saving nothing')
+    expect([[shown(open_pick(d), i) for i in range(9)] for d in (b'3\n', b'8', b'9', b'')] == [[int(i == k) for i in range(9)] for k in (3, 8, 0, 0)], 'a saved scheme has the check; an invalid or empty file is Classic')
+    m = open_pick()
+    for k in (2, 8, 0, 7, 1):
+        n0 = m.unloads
+        m.click(f'pod_row{k}')
+        expect(m.fs.get(SCHEME_FILE) == b'%d\n' % k and SCHEME_TMP not in m.fs and ('rename', SCHEME_TMP, SCHEME_FILE) in m.calls and [shown(m, i) for i in range(9)] == [int(i == k) for i in range(9)]
+               and m.unloads == n0 + 1, f'a tap on {names[k]}: written atomically, applied at once (the cached images dropped), the check follows')
+    m = open_pick(b'1\n'); m.fail.add(('write', SCHEME_TMP)); m.click('pod_row3')
+    expect(m.fs.get(SCHEME_FILE) == b'1\n' and not any(c[0] == 'widget_set_visible' for c in m.calls) and m.unloads == 0, 'a failed write changes neither the file, the check nor the screen')
+    # the assets: a swatch (never a glyph) where a row's glyph goes, hidden insensitive checks
+    raw = os.path.join(WORK, 'rootfs/release/assets/default/raw')
+    tree = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_scheme.bin'), 'rb').read())
+    ok = True
+    for i in range(9):
+        r = tree.find(f'pod_row{i}'); sw = r.find('pod_swatch'); ck = tree.find(f'pod_check{i}')
+        ok &= sw is not None and sw.get('image') == f'pod_sw_s{i}' and sw.get('sensitive') == 'false' and r.find('pod_icon') is None and ck.get('visible') == 'false' and ck.get('sensitive') == 'false'
+    expect(ok and tree.find('label_title').get('tr_text') == 'Scheme', 'the picker asset: a pod_swatch image pod_sw_s<i> in each row (not a pod_icon), a hidden insensitive check each')
+    from PIL import Image
+    imgs = {i: Image.open(os.path.join(raw, f'images/xx/pod_sw_s{i}.png')).convert('RGBA') for i in range(9)}
+    opaque = lambda im: {p[:3] for p in im.getdata() if p[3] == 255}
+    ink = lambda i: L.scheme_ends(L.SCHEMES[i])[1]
+    expect(all(im.size == (24, 24) for im in imgs.values()) and not opaque(imgs[0]) and imgs[0].getpixel((12, 12))[3] == 0
+           and all(opaque(imgs[i]) == {tuple(ink(i)), tuple(L.scheme_accent(L.SCHEMES[i]))} and imgs[i].getpixel((5, 12))[:3] == tuple(ink(i)) and imgs[i].getpixel((18, 12))[:3] == tuple(L.scheme_accent(L.SCHEMES[i])) for i in range(1, 8))
+           and opaque(imgs[8]) == {(0x8C,) * 3} and all(im.getpixel((0, 0))[3] == 0 for im in imgs.values()),
+           'the swatches: a 20 px round disc on a 24 px canvas, the scheme\'s day ink on the left and its accent on the right (Greyscale one grey, Classic transparent)')
+    expect(all(L.image_flips(f'pod_sw_s{i}.png', imgs[i]) is None for i in range(9)) and all(L.accent_kind(f'pod_sw_s{i}') is None for i in range(9)), 'a swatch is never flipped by Light nor tinted by an accent')
+    st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_appearance.bin'), 'rb').read())
+    expect(st.find('pod_row0').find('pod_icon').get('image') == 'pod_ci_sun_moon' and st.find('pod_value0').get('tr_text') == 'Classic' and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_contrast',
+           'the Appearance page asset: the Scheme row with the sun-moon glyph, the value "Classic" before the payload sets it')
+
+
 def roles_tests(ctx):
     """The unique role colours: in the built theme and the payload they appear only in their role (the hooks see a colour, not the style it came from)."""
     expect = ctx.expect
@@ -870,7 +947,7 @@ def accent_picker_tests(ctx):
            'the picker: Neutral and the six accents in the saved order, titled Accent, a check each')
     expect(V.rows[row_i].arg == P.APPEARANCE_PAGE_INDEX and V.rows[row_i].action == P.ACT_PAGE and P.row_kind(V.rows[row_i]) == 'link' and [r.label for r in V.rows[row_i - 1:row_i + 2]] == ['Display', 'Appearance', 'Buttons & Power']
            and 'Light Mode' not in [r.label for r in V.rows] and 'Accent' not in [r.label for r in V.rows], 'Settings: an Appearance link (a chevron, no value) after Display; the Light row still hidden')
-    expect([(r.label, r.action, r.arg) for r in W.rows][1:2] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[1]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
+    expect([(r.label, r.action, r.arg) for r in W.rows][2:3] == [('Accent', P.ACT_ACCENT, P.ACCENT_PAGE_INDEX)] and P.row_kind(W.rows[2]) == 'value' and W.title == 'Appearance' and W.key == 'm1plus_appearance'
            and P.PAGES[P.APPEARANCE_PAGE_INDEX] is W, 'the Appearance page: an Accent value row opening the picker')
 
     def open_pick(data=None):
@@ -903,7 +980,7 @@ def accent_picker_tests(ctx):
         row = m.alloc(12)
         m.setword(row, m.cstr('pod_row0')); m.setword(row + 4, P.ACT_PAGE); m.setword(row + 8, P.APPEARANCE_PAGE_INDEX)
         m.call(PSYMS['on_row'], a0=row, count=6000000)
-        return [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value1']]
+        return [c[2] for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['pod_value2']]
     expect([settings_value(d) for d in (None, b'1\n', b'6\n', b'8')] == [['Neutral'], ['Red'], ['Champagne'], ['Neutral']], 'the Appearance Accent row shows the saved accent, Neutral for no or an invalid file')
     # the assets: a swatch (never a glyph) where a row's glyph goes, hidden insensitive checks
     raw = os.path.join(WORK, 'rootfs/release/assets/default/raw')
@@ -921,7 +998,7 @@ def accent_picker_tests(ctx):
            'the swatches: a 20 px round disc in each accent\'s colour (Neutral #EEEEEC) on a 24 px canvas')
     expect(all(L.image_flips(f'pod_sw{i}.png', imgs[i]) is None for i in range(7)) and all(L.accent_kind(f'pod_sw{i}') is None for i in range(7)), 'a swatch is never flipped by Light nor tinted by an accent')
     st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_appearance.bin'), 'rb').read())
-    expect(st.find('pod_row1') is not None and st.find('pod_row1').find('pod_icon').get('image') == 'pod_ci_palette' and st.find('pod_value1').get('tr_text') == 'Neutral' and st.find('label_title').get('tr_text') == 'Appearance',
+    expect(st.find('pod_row2') is not None and st.find('pod_row2').find('pod_icon').get('image') == 'pod_ci_palette' and st.find('pod_value2').get('tr_text') == 'Neutral' and st.find('label_title').get('tr_text') == 'Appearance',
            'the Appearance page: the Accent row with the palette glyph, the value "Neutral" before the payload sets it')
     st = awtk_ui.parse(open(os.path.join(raw, 'ui/m1plus_settings.bin'), 'rb').read())
     expect(st.find(f'pod_row{row_i}').find('pod_icon').get('image') == 'pod_ci_palette' and st.find(f'pod_value{row_i}') is None, 'the Settings Appearance row: the palette glyph, no value')
@@ -1514,4 +1591,4 @@ def grey_tests(ctx):
             expect({p[:3] for p in LM(mode, acc=acc).image('pod_ic_dltile', 4, 4, sq)} == {L.TILE}, f'Classic (background {mode}, accent {acc}): the tile square stays #1C1C1E')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests, grey_tests]
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, scheme_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests, scheme_map_tests, scheme_setting_tests, scheme_image_tests, scheme_light_tests, grey_tests]

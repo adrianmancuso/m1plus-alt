@@ -17,17 +17,23 @@ the modded default theme ([theme](theme.md)).
 
 ## Settings
 
-Settings > Appearance (a link row, glyph `palette`) opens `m1plus_appearance`: a **Background** row
-(`ACT_BG` 46) above an **Accent** row (`ACT_ACCENT` 48).
+Settings > Appearance (a link row, glyph `palette`) opens `m1plus_appearance`: a **Scheme** row
+(`ACT_SCHEME` 191) in a card of its own, then a **Background** row (`ACT_BG` 46) above an **Accent**
+row (`ACT_ACCENT` 48). Background and Accent are invisible and insensitive while a scheme other than
+Classic is saved (`open_page` refresh in `patch/m1plus.c`).
 
 | File (`/mnt/data/m1plus/`) | Values |
 |---|---|
 | `appearance-accent` | one digit 0..6 (Neutral, Red, Orange, Green, Teal, Purple, Champagne); anything else or missing is Neutral |
+| `appearance-scheme` | one digit 0..8 (Classic, Navy & Coral, Teal & Sunflower, Federal Blue & Fluoro Orange, Green & Bright Red, Purple & Yellow, Burgundy & Mint, Black & Fluoro Pink, Greyscale); anything else or missing is Classic |
 | `appearance-background` | `0` Black, `1` Tinted, `2` Light, `3` Light Auto; others Black |
 
 - The Accent picker `m1plus_accent` has one check row per accent with a round swatch (`pod_sw<i>`;
   Neutral `#EEEEEC`). A tap calls `pal_accent_set`: saved atomically, applied at once. A failed save
   changes nothing. The swatches are never flipped or tinted.
+- The Scheme picker `m1plus_scheme` has one check row per scheme with a round swatch (`pod_sw_s<i>`:
+  the day ink left, the accent right; Greyscale one grey; Classic a transparent one so the labels
+  line up). A tap calls `pal_scheme_set`, as the Accent picker does.
 - The Background picker `m1plus_background` offers Black and Tinted. Light is reachable only by
   editing the file.
 - Both files are written through `home_write_atomic`.

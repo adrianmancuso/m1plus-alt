@@ -188,7 +188,9 @@ enum {
     ACT_BTCODECSET =
         184, /* the Bluetooth page's Audio Codec picker's rows (arg = stock's btcoding 0 .. 7; patch/btpage.c) */
     ACT_BATTHIST = 188, /* Battery History page: the switch (patch/batthist.c) */
-    ACT_BHPAGE = 190 /* Settings > Battery: Battery History, a value row (On or Off) opening its page */
+    ACT_BHPAGE = 190, /* Settings > Battery: Battery History, a value row (On or Off) opening its page */
+    ACT_SCHEME = 191, /* Settings > Appearance > Scheme: a value row (the scheme's name) opening its picker */
+    ACT_SCHEMESET = 192 /* the Scheme picker's rows (arg = the scheme 0 .. 8) */
 };
 
 struct pod_row {
@@ -244,6 +246,7 @@ enum {
     VK_VTHEME,
     VK_BG,
     VK_ACCENT,
+    VK_SCHEME,
     VK_REGION,
     VK_CHGLIM,
     VK_LOCKSTYLE,
@@ -505,6 +508,7 @@ static const struct pick_def {
     {ACT_VTHEME, VK_VTHEME, ACT_VTHSET, vinyl_theme, vinyl_theme_set},
     {ACT_BG, VK_BG, ACT_BGSET, pal_bg_mode, pal_bg_set},
     {ACT_ACCENT, VK_ACCENT, ACT_ACCENTSET, pal_accent_saved, pal_accent_set},
+    {ACT_SCHEME, VK_SCHEME, ACT_SCHEMESET, pal_scheme, pal_scheme_set},
     {ACT_REGION, VK_REGION, ACT_REGIONSET, pcregion_saved, pcregion_set},
     {ACT_PCDIR, VK_PCDIR, ACT_PCDIRSET, pcdir_setting, pcdir_set},
     {ACT_PEQ, VK_EQ, 0, (int (*)(void))0, (int (*)(int))0},
@@ -827,6 +831,15 @@ static const char *const record_key[VN_RECS] = {"Black", "Cover"};
 static const char *const vtheme_key[VN_THEMES] = {"Graphite", "Snow"};
 static const char *const accent_key[PAL_ACCENTS] = {
     "Neutral", "Red", "Orange", "Green", "Teal", "Purple", "Champagne"}; /* tools/pod_pages.py ACCENT_VALUES */
+static const char *const scheme_key[9] = {"Classic",
+                                          "Navy & Coral",
+                                          "Teal & Sunflower",
+                                          "Federal Blue & Fluoro Orange",
+                                          "Green & Bright Red",
+                                          "Purple & Yellow",
+                                          "Burgundy & Mint",
+                                          "Black & Fluoro Pink",
+                                          "Greyscale"}; /* tools/pod_pages.py SCHEME_VALUES */
 
 static void value_text(void *label, int kind) {
     char buf[64]; /* a preset name: PEQ_NAME */
@@ -853,6 +866,8 @@ static void value_text(void *label, int kind) {
         key = pal_bg_mode() == 1 ? "Tinted" : "Black"; /* (Light, 2 and 3, is not in the picker) */
     else if (kind == VK_ACCENT)
         key = accent_key[pal_accent_saved()];
+    else if (kind == VK_SCHEME)
+        key = scheme_key[pal_scheme() < 9 ? pal_scheme() : 0];
     else if (kind == VK_REGION) { /* the storefront's name (English in every language), or Automatic */
         pcregion_value(buf, sizeof buf);
         widget_set_text_utf8(label, buf);
@@ -1073,6 +1088,13 @@ static void page_refresh(void *win, const struct pod_page *page) {
             ACT_RGBROW) { /* LED Light > Theme: its own card, there only while Dynamic is the chosen lamp (hidden rows close up, as Regenerate Daily Mix) */
             void *item = widget_lookup(win, row->name, 1);
             int on = tl_led() == 3;
+            if (item) widget_set_visible(item, on, 0), widget_set_sensitive(item, on);
+        }
+        if (row->action == ACT_BG ||
+            row->action ==
+                ACT_ACCENT) { /* a scheme chooses the colours itself: Background and Accent are there only under Classic */
+            void *item = widget_lookup(win, row->name, 1);
+            int on = pal_scheme() == 0;
             if (item) widget_set_visible(item, on, 0), widget_set_sensitive(item, on);
         }
         if (row->action == ACT_DTDATE || row->action == ACT_DTTIME) {

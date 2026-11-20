@@ -194,6 +194,8 @@ ACT_NETTRANS = 168     # link row (Network Services): Wi-Fi Transfer, our page (
 ACT_SLEEPSET = 170    # picker row (the Sleep Timer page, opened by Now Playing's More sheet and the Control Center tile): choose the time (arg = an index of SLEEP_VALUES, 0 off; stock's sleepflag byte and sleep_time word; patch/sleeptimer.c st_set)
 ACT_SLEEPLEFT = 171   # information row (the Sleep Timer page, a card of its own under the choices, shown only while a timer runs): Time Left, H:MM rounded up to the minute (patch/sleeptimer.c st_left_text); no chevron, no touch
 ACT_BATTHIST = 188     # switch row (Battery History page): Battery History, off by default; records the last 24 hours of battery level and use (patch/batthist.c bh_toggle, /mnt/data/m1plus/battery-history)
+ACT_SCHEME = 191      # value row (Settings > Appearance > Scheme): the scheme's name; opens its picker page (arg = the page index); the payload shows the saved scheme (patch/palette.c pal_scheme)
+ACT_SCHEMESET = 192   # picker row (Scheme): choose the scheme (arg = its index in SCHEME_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_scheme_set)
 ACT_BHPAGE = 190      # value row (Settings > Battery): Battery History, On or Off as the switch on its page; opens the Battery History page (arg = its page index; patch/batthist.c bh_setting)
 ACT_BTCODECSET = 184  # picker row (the Audio Codec page of the Bluetooth page): choose the preferred codec (arg = stock's btcoding 0 .. 7; patch/btpage.c bp_codec_set: the init guard, stock's confirm while a device is connected, then stock's Quality choice)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
@@ -201,10 +203,10 @@ assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mir
 SWITCH_ACTIONS = (ACT_ASPLIT,) + ASSEP_ACTIONS + (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO, ACT_GAPLESS, ACT_FOLDERSKIP, ACT_DIGITAL, ACT_FOLDERCOVER, ACT_BOOTMEM, ACT_MONO, ACT_BATTHIST)
 SWITCH_ACTIONS += (ACT_ROTATE, ACT_CARMODE, ACT_NETAIR, ACT_NETDLNA)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_ASPAGE, ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_BHPAGE, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_SCROBPAGE, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE, ACT_RGBROW, ACT_XFEED)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_PCDIRSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_RGBTHEME, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET, ACT_XFEEDSET, ACT_SLEEPSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_ASPAGE, ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_SCHEME, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_BHPAGE, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_SCROBPAGE, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE, ACT_RGBROW, ACT_XFEED)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_PCDIRSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_SCHEMESET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_RGBTHEME, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET, ACT_XFEEDSET, ACT_SLEEPSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_ASPAGE: 'Off', ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_BHPAGE: 'Off', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_SCROBPAGE: 'Off', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0', ACT_RGBROW: 'Reference', ACT_XFEED: 'Off'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_ASPAGE: 'Off', ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_SCHEME: 'Classic', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_BHPAGE: 'Off', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_SCROBPAGE: 'Off', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0', ACT_RGBROW: 'Reference', ACT_XFEED: 'Off'}   # what the asset's value label says before the payload sets it
 VALUE_ACTIONS += (ACT_LANG,)
 CHECK_ACTIONS += (ACT_LANGSET, ACT_BTCODECSET)
 VALUE_INIT[ACT_LANG] = ''   # the language's own name: the payload sets it as the page opens
@@ -371,6 +373,7 @@ PAGE_ORDER = [   # every page, in the order of its number: this table alone deci
     'm1plus_relnotes',
     'm1plus_background',
     'm1plus_accent',
+    'm1plus_scheme',
     'm1plus_appearance',
     'm1plus_pulldown',
     'm1plus_radio',
@@ -511,6 +514,7 @@ VINYL_WHITE_INDEX = page_index('m1plus_vinyl_white')
 VTHEME_PAGE_INDEX = page_index('m1plus_vinyltheme')
 BG_PAGE_INDEX = page_index('m1plus_background')
 ACCENT_PAGE_INDEX = page_index('m1plus_accent')
+SCHEME_PAGE_INDEX = page_index('m1plus_scheme')
 APPEARANCE_PAGE_INDEX = page_index('m1plus_appearance')
 GENERAL_PAGE_INDEX = page_index('m1plus_general')
 NETSERVICE_PAGE_INDEX = page_index('m1plus_netservice')
@@ -1054,6 +1058,11 @@ BG_VALUES = ('Black', 'Tinted')   # the value the Background row shows for the s
 ACCENT_VALUES = ('Neutral', 'Red', 'Orange', 'Green', 'Teal', 'Purple', 'Champagne')
 ACCENT_PAGE = Page('m1plus_accent', 'm1plus_accent_page', 'Accent', layout=[Row(n, ACT_ACCENTSET, i) for i, n in enumerate(ACCENT_VALUES)])
 
+# Settings > Appearance > Scheme (docs/modules/accent.md): the picker, one row per scheme in the saved order (tools/palette.py SCHEMES) with its two-colour swatch (the image pod_sw_s<arg>, tools/mod_icons.py; Classic has none)
+# and a check on the chosen one. The choice applies at once (patch/palette.c pal_scheme_set).
+SCHEME_VALUES = ('Classic', 'Navy & Coral', 'Teal & Sunflower', 'Federal Blue & Fluoro Orange', 'Green & Bright Red', 'Purple & Yellow', 'Burgundy & Mint', 'Black & Fluoro Pink', 'Greyscale')
+SCHEME_PAGE = Page('m1plus_scheme', 'm1plus_scheme_page', 'Scheme', layout=[Row(n, ACT_SCHEMESET, i) for i, n in enumerate(SCHEME_VALUES)])
+
 # Settings > Appearance > Lock Screen (patch/lockscreen.c, docs/modules/lockscreen.md): it replaces stock's systemset/screensaver_page (the Display page's Lock Screen row opens this page, tools/pod.py LOCKROW).
 # Four cards: Enable (stock's lock screen switch); Wallpaper (our picker) and Show Time (stock's clock switch; our own short label, as the page already says Lock Screen); Player Style (a value row, its picker); and
 # the Custom Wallpaper instructions (LOCKINFO_PAGE).
@@ -1079,9 +1088,9 @@ LOCKWALL_PAGE = Page('m1plus_lockwall', 'm1plus_lockwall_page', 'Wallpaper', kin
 # The Custom Wallpaper instructions: a Release Notes page (the same asset, tools/pod_ui.py build_relnotes_page, and painter, patch/relnotes.c lockinfo_open): the heading "Add Your Own Pictures" and three paragraphs.
 LOCKINFO_PAGE = Page('m1plus_lockinfo', 'm1plus_lockinfo_page', 'Custom Wallpaper', kind='relnotes')
 
-# Settings > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card
-# with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
-APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
+# Settings > Appearance: the Scheme value row (the scheme's name) in a card of its own; then a card with the Background value row (Black or Tinted) and the Accent value row (the accent's name),
+# each opening its picker, both hidden while a scheme other than Classic is chosen (patch/m1plus.c); then a card with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
+APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Scheme', ACT_SCHEME, SCHEME_PAGE_INDEX), GAP, Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
                                                                                          GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
 
 # Settings > Battery (patch/charging.c, docs/modules/charging.md): the Charge Limit value row and its note; the picker lists the limits, a check on the chosen one
