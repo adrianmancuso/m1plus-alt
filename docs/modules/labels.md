@@ -18,18 +18,20 @@ shared worker during the Home pass ([homecover](homecover.md#record-labels)) and
 | FLAC | Vorbis comment `LABEL`, `ORGANIZATION`, `PUBLISHER` (block type 4, at most 256 blocks walked) |
 | Ogg Vorbis, Opus | the same, from the comment packet reassembled over at most 64 pages |
 | MP3 (ID3v2.2–2.4) | `TXXX:LABEL` (`TXX`), then `TPUB` (`TPB`); FLAC after an ID3 tag is read when the tag has none |
+| WAV, AIFF, AIFC | the ID3v2 tag in the top-level `id3 ` or `ID3 ` chunk, read as for MP3; chunks are walked by seeking (at most 256), so the audio costs nothing |
 | MP4 (M4A) | iTunes freeform `----:…:LABEL`, `ORGANIZATION`, `PUBLISHER` in `moov/udta/meta/ilst` (or `moov/meta`); boxes are walked by seeking, so `moov` after `mdat` and cover art cost nothing |
 
 Tag names compare case-insensitively. ID3 text in encodings 0–3 becomes UTF-8. Compressed,
 encrypted or unsynchronised frames are skipped, and a frame the file cuts short is not taken. The
 value is trimmed, control characters become spaces, and it is cut to `LB_MAX - 1` (127) bytes at a
-character boundary. DSF and WAV are not read (no label). An MP4 box past 4 GB stops the walk.
+character boundary. DSF, RF64 and WAV `LIST`/`INFO` tags are not read (no label). An MP4 box past 4 GB and a
+WAV or AIFF chunk past 2 GB stop the walk.
 
 ## Table
 
 `/mnt/mmc/.m1plus/labels` (`LB_FILE`, written through `LB_TMP` and renamed):
 
-- A 20-byte header: magic `M1LB`, entry count, label count, pool bytes, FNV-1a of the body.
+- A 20-byte header: magic `M1L2`, entry count, label count, pool bytes, FNV-1a of the body.
 - Entries `{key, size, lab}`, sorted by `key = lb_key(path)` (FNV-1a). `lab` 0 means read with no
   label; otherwise it is 1 + the label's index.
 - The pool: the label names, NUL-terminated. Every name is used by some entry.

@@ -38,7 +38,7 @@ def parse(data):
 def labels_table(rows):
     """A record labels table (patch/labels.c) of [(path, size)], none with a label."""
     body = b''.join(struct.pack('<III', k, s, 0) for k, s in sorted((key(p), s) for p, s in rows))
-    return struct.pack('<5I', 0x424c314d, len(body) // 12, 0, 0, fnv_plain(body)) + body
+    return struct.pack('<5I', 0x324c314d, len(body) // 12, 0, 0, fnv_plain(body)) + body
 
 
 def seeded(entries=(), **kw):

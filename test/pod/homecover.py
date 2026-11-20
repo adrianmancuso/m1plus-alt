@@ -39,7 +39,7 @@ def home_machine(n=8, missing=(), empty=(), rebuild=False, stamp='stale', start=
     m.fs[SORT_FILE] = b'0\n'
     if stamp == 'stale': stamp = stamp_text(n, h=hash_of(n) ^ 0x10)
     if stamp is not None: m.fs[STAMP] = stamp.encode()
-    if labels: m.fs[LABELS] = struct.pack('<5I', 0x424c314d, 0, 0, 0, O['FNV_SEED'])   # an empty record labels table (patch/labels.c): its absence makes the tracks line stale
+    if labels: m.fs[LABELS] = struct.pack('<5I', 0x324c314d, 0, 0, 0, O['FNV_SEED'])   # an empty record labels table (patch/labels.c): its absence makes the tracks line stale
     m.dirs.add('/mnt/mmc/.m1plus')
     m.db = {DB: [100, 0, 4096]}
     if rebuild: m.fs[REQ] = b'1\n'   # Settings > Library > Rebuild Covers was confirmed

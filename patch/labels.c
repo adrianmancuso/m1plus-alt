@@ -13,7 +13,7 @@
 
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
-#define LB_MAGIC 0x424c314du /* "M1LB" */
+#define LB_MAGIC 0x324c314du /* "M1L2" (was "M1LB" before WAV and AIFF were read: those tables are rebuilt) */
 #define LB_HDR 20
 
 typedef struct {
@@ -201,19 +201,20 @@ static unsigned lb_id3str(unsigned enc, const unsigned char *b, unsigned n, unsi
     return p;
 }
 
-/* An ID3v2.2-2.4 tag at 0 (h: its 10 byte header): TXXX:LABEL, else TPUB (v2.2 TXX, TPB). *end gets the tag's end (a FLAC may follow). */
-static int lb_id3(int fd, const unsigned char *h, unsigned char *buf, char *out, unsigned size, unsigned *end) {
-    unsigned ver = h[3], fl = h[5], pos = 10, hl = ver == 2 ? 6 : 10, i, best = 0;
+/* An ID3v2.2-2.4 tag at base (h: its 10 byte header): TXXX:LABEL, else TPUB (v2.2 TXX, TPB). *end gets the tag's end (a FLAC may follow). */
+static int lb_id3(int fd, unsigned base, const unsigned char *h, unsigned char *buf, char *out, unsigned size,
+                  unsigned *end) {
+    unsigned ver = h[3], fl = h[5], pos = base + 10, hl = ver == 2 ? 6 : 10, i, best = 0;
     unsigned char f[10], t[LB_MAX * 2];
     int len = 0;
-    *end = 10 + sync32(h + 6);
+    *end = base + 10 + sync32(h + 6);
     if (fl & 0x10) *end += 10; /* (a v2.4 footer) */
     if (ver < 2 || ver > 4) return 0;
     if (ver >= 3 && fl & 0x40) { /* an extended header */
         if (lb_rd(fd, pos, f, 4) != 4) return 0;
         pos += ver == 3 ? 4 + be32(f) : sync32(f);
     }
-    for (i = 0; i < 1024 && pos + hl <= 10 + sync32(h + 6); ++i) {
+    for (i = 0; i < 1024 && pos + hl <= base + 10 + sync32(h + 6); ++i) {
         unsigned fs, rank, txxx, n, p;
         if (lb_rd(fd, pos, f, hl) != hl || !f[0]) break; /* padding */
         fs = ver == 2 ? (unsigned)f[3] << 16 | f[4] << 8 | f[5] : ver == 3 ? be32(f + 4) : sync32(f + 4);
@@ -239,6 +240,23 @@ static int lb_id3(int fd, const unsigned char *h, unsigned char *buf, char *out,
         pos += hl + fs;
     }
     return len;
+}
+
+/* A RIFF WAVE (le: little-endian sizes) or AIFF/AIFC FORM file: the ID3v2 tag in its top-level "id3 " or "ID3 " chunk. Chunks are walked by
+ * seeking (at most 256 looked at), so the audio costs nothing; a chunk past 2 GB stops the walk. */
+static int lb_chunks(int fd, int le, unsigned char *buf, char *out, unsigned size) {
+    unsigned char h[10];
+    unsigned pos = 12, i, n, end;
+    for (i = 0; i < 256 && lb_rd(fd, pos, h, 8) == 8; ++i) {
+        n = le ? le32(h + 4) : be32(h + 4);
+        if ((lb_eq(h, "id3 ", 4) || lb_eq(h, "ID3 ", 4)) && n >= 10) {
+            if (lb_rd(fd, pos + 8, h, 10) != 10 || !lb_eq(h, "ID3", 3)) return 0;
+            return lb_id3(fd, pos + 8, h, buf, out, size, &end);
+        }
+        if (n > 0x7ffffff0u - pos) return 0;
+        pos += 8 + n + (n & 1); /* (chunks are padded to an even size) */
+    }
+    return 0;
 }
 
 /* The child box of type t in [pos, end) (at most 256 looked at): *at its start, *len its size; 0 when there is none. A 64-bit size past 4 GB and
@@ -333,10 +351,14 @@ int lb_probe(const char *path, char *out, unsigned size) {
         else if (lb_eq(h, "OggS", 4))
             len = lb_ogg(fd, buf, out, size);
         else if (lb_eq(h, "ID3", 3)) {
-            len = lb_id3(fd, h, buf, out, size, &end);
+            len = lb_id3(fd, 0, h, buf, out, size, &end);
             if (!len && lb_rd(fd, end, h, 4) == 4 && lb_eq(h, "fLaC", 4)) len = lb_flac(fd, end + 4, buf, out, size);
         } else if (lb_eq(h + 4, "ftyp", 4))
             len = lb_mp4(fd, buf, out, size);
+        else if (lb_eq(h, "RIFF", 4) && lb_rd(fd, 8, h, 4) == 4 && lb_eq(h, "WAVE", 4))
+            len = lb_chunks(fd, 1, buf, out, size);
+        else if (lb_eq(h, "FORM", 4) && lb_rd(fd, 8, h, 4) == 4 && (lb_eq(h, "AIFF", 4) || lb_eq(h, "AIFC", 4)))
+            len = lb_chunks(fd, 0, buf, out, size);
     }
     close(fd);
     free(buf);

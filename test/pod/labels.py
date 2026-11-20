@@ -1,10 +1,10 @@
-"""Record labels (patch/labels.c): the tag reader over synthetic FLAC, Ogg Vorbis, Opus and MP3 (ID3v2.2-2.4) files, and the table file (format,
+"""Record labels (patch/labels.c): the tag reader over synthetic FLAC, Ogg Vorbis, Opus, MP3 (ID3v2.2-2.4), M4A, WAV and AIFF files, and the table file (format,
 lookup, merge, a changed size, labels shared and dropped, prune, corrupt files, clear). The compiled payload runs under Unicorn."""
 import struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 LBF, LBT = '/mnt/mmc/.m1plus/labels', '/mnt/mmc/.m1plus/labels.tmp'
-MAGIC = 0x424c314d
+MAGIC = 0x324c314d
 LB_MAX = 128
 
 
@@ -93,6 +93,20 @@ def m4a(*items, mdat=b'\0' * 64, moov_last=False, fullbox=True, cover=0, udta=Tr
 def id3(ver, *frames, padding=64, after=b'\xff\xfb\x90\x00' + b'\0' * 400):
     body = b''.join(frames) + b'\0' * padding
     return b'ID3' + bytes([ver, 0, 0]) + syncsafe(len(body)) + body + after
+
+
+def chunk(t, body, le):
+    return t.encode('latin-1') + struct.pack('<I' if le else '>I', len(body)) + body + (b'\0' if len(body) & 1 else b'')
+
+
+def wav(*chunks, riff=b'RIFF', form=b'WAVE'):
+    body = form + b''.join(chunks)
+    return riff + struct.pack('<I', len(body)) + body
+
+
+def aiff(*chunks, form=b'AIFF'):
+    body = form + b''.join(chunks)
+    return b'FORM' + struct.pack('>I', len(body)) + body
 
 
 def utf8(m, a): return bytes(m.u.mem_read(a, 512)).split(b'\0')[0].decode() if a else None
@@ -195,7 +209,17 @@ def probe_tests(ctx):
         'M4A another freeform is not the label': (m4a(freeform('CATALOGNUMBER', 'X1'), freeform('iTunNORM', 'y')), ''),
         'M4A a binary data item is not taken': (m4a(freeform('LABEL', 'bin', ty=0x15)), ''),
         'M4A no label': (m4a(), ''),
-        'a WAV': (b'RIFF' + b'\0' * 100, ''),
+        'WAV id3 chunk after the audio': (wav(chunk('fmt ', b'\0' * 16, 1), chunk('data', b'\0' * 1001, 1), chunk('id3 ', id3(3, tpub(3, 'Warp'), after=b''), 1)), 'Warp'),
+        'WAV ID3 chunk before the audio': (wav(chunk('ID3 ', id3(4, txxx(4, 'LABEL', 'Kranky'), after=b''), 1), chunk('data', b'\0' * 64, 1)), 'Kranky'),
+        'WAV LIST and odd chunks are skipped': (wav(chunk('LIST', b'INFOx', 1), chunk('data', b'\0' * 3, 1), chunk('id3 ', id3(3, tpub(3, 'Mego'), after=b''), 1)), 'Mego'),
+        'WAV no id3 chunk': (wav(chunk('fmt ', b'\0' * 16, 1), chunk('data', b'\0' * 64, 1)), ''),
+        'WAV an id3 chunk without a tag': (wav(chunk('id3 ', b'\0' * 32, 1)), ''),
+        'RF64 is not read': (wav(chunk('id3 ', id3(3, tpub(3, 'X'), after=b''), 1), riff=b'RF64'), ''),
+        'RIFF that is not WAVE': (wav(chunk('id3 ', id3(3, tpub(3, 'X'), after=b''), 1), form=b'AVI '), ''),
+        'AIFF ID3 chunk after SSND': (aiff(chunk('COMM', b'\0' * 18, 0), chunk('SSND', b'\0' * 2001, 0), chunk('ID3 ', id3(4, tpub(4, 'Raster'), after=b''), 0)), 'Raster'),
+        'AIFC': (aiff(chunk('FVER', b'\0' * 4, 0), chunk('ID3 ', id3(3, txxx(3, 'LABEL', 'Touch'), after=b''), 0), form=b'AIFC'), 'Touch'),
+        'AIFF no ID3 chunk': (aiff(chunk('COMM', b'\0' * 18, 0), chunk('SSND', b'\0' * 64, 0)), ''),
+        'a bare RIFF': (b'RIFF' + b'\0' * 100, ''),
         'an empty file': (b'', ''),
         'garbage': (b'\xff' * 50, ''),
     }
@@ -241,6 +265,14 @@ def probe_tests(ctx):
     m.fs['/w.m4a'] = box('ftyp', b'M4A ') + struct.pack('>I', 1) + b'mdat' + struct.pack('>II', 1, 16) + b'\0' * 16 + box('moov', b'')
     expect(probe(m, '/w.m4a') == (0, ''), 'an mdat past 4 GB stops the walk')
 
+    good = aiff(chunk('COMM', b'\0' * 18, 0), chunk('SSND', b'\0' * 200, 0), chunk('ID3 ', id3(3, tpub(3, 'Kompakt'), padding=0, after=b''), 0))
+    for cut in (8, 12, 20, 40, len(good) - 30, len(good) - 4):
+        m.fs['/t.aiff'] = good[:cut]
+        n, got = probe(m, '/t.aiff')
+        expect(got == '', f'an AIFF cut at {cut} bytes reads safely, without the label ({got!r})')
+    m.fs['/h.wav'] = b'RIFF\0\0\0\0WAVE' + b'data' + struct.pack('<I', 0xfffffff0) + b'\0' * 40 + chunk('id3 ', id3(3, tpub(3, 'X'), after=b''), 1)
+    expect(probe(m, '/h.wav') == (0, ''), 'a WAV chunk that claims nearly 4 GB stops the walk')
+
     # bounded: the picture in front of the comment is skipped by seeking, not read
     m = Machine()
     m.fs['/p.flac'] = flac('LABEL=Thrill Jockey', picture=5_000_000)
@@ -248,6 +280,10 @@ def probe_tests(ctx):
     seeks = [c for c in m.calls if c[0] == 'lseek' and c[1] == '/p.flac']
     expect(len([c for c in m.calls if c[0] == 'read']) <= 12 and any(c[2] > 5_000_000 for c in seeks), 'a 5 MB picture is seeked over, a handful of reads')
     expect(not [c for c in m.calls if c[0] == 'open' and c[1] == '/p.flac' and c[2] & 3], 'the file is opened read-only')
+    m.calls.clear()
+    m.fs['/p.aiff'] = aiff(chunk('COMM', b'\0' * 18, 0), chunk('SSND', b'\0' * 5_000_000, 0), chunk('ID3 ', id3(3, tpub(3, 'Kranky'), after=b''), 0))
+    expect(probe(m, '/p.aiff') == (6, 'Kranky'), 'the AIFF label after 5 MB of audio')
+    expect(len([c for c in m.calls if c[0] == 'read']) <= 12, '5 MB of AIFF audio is seeked over, a handful of reads')
     expect(len([c for c in m.calls if c[0] == 'open']) == len([c for c in m.calls if c[0] == 'close']), 'every open is closed')
 
 
@@ -307,6 +343,7 @@ def table_tests(ctx):
     rows, pool = [('/a.flac', 10, 1), ('/b.flac', 20, 2)], ['A', 'B']
     bad = {
         'wrong magic': table(rows, pool, magic=1),
+        'the M1LB table from before WAV and AIFF were read': table(rows, pool, magic=0x424c314d),
         'wrong checksum': table(rows, pool, check=1),
         'unsorted': table(sorted(rows, key=lambda r: -key(r[0])), pool, sort=False),
         'a label index past the pool': table([('/a.flac', 10, 3)], pool),

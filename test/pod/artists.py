@@ -2622,7 +2622,7 @@ def label_table(rows, names):
     ents = sorted(((fnv(O['FNV_SEED'], p) or 1), z, l) for p, z, l in rows)
     pool = b''.join(n.encode() + b'\0' for n in names)
     body = b''.join(struct.pack('<III', *e) for e in ents) + pool
-    return struct.pack('<5I', 0x424c314d, len(ents), len(names), len(pool), fnv_plain(body)) + body
+    return struct.pack('<5I', 0x324c314d, len(ents), len(names), len(pool), fnv_plain(body)) + body
 
 
 def label_page_tests(ctx):
